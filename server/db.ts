@@ -275,7 +275,7 @@ function runMigrations(db: DatabaseType): void {
  * Migrates data from legacy server_collection.json if SQLite database has no collections
  */
 function migrateFromLegacyJsonIfEmpty(db: DatabaseType): void {
-  const countRow = db.prepare('SELECT COUNT(*) as count FROM collections').get() as { count: number };
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM media_items').get() as { count: number };
   if (countRow.count > 0) return;
 
   if (!fs.existsSync(LEGACY_JSON_PATH)) {
