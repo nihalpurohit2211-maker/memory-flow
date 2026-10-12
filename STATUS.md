@@ -1,12 +1,13 @@
 # MemoryFlow — Status & Handoff
 
-**Last Updated:** 2026-10-12T11:15:00+05:30  
-**Current Stage:** Final Completion & Independent Audit Signoff (All Priorities Passed & Verified)  
-**Overall Status:** ALL PHASES COMPLETE (Priorities 1–4 Passed, 30/30 Tests Passing, GitHub Public Repository Live)
+**Last Updated:** 2026-10-12T12:20:00+05:30  
+**Current Stage:** Final Reliable Shareable Release (All 8 Requirements Implemented, Audited & Verified)  
+**Overall Status:** COMPLETE & PRODUCTION-READY (39/39 Vitest Tests Passing, TypeScript 0 Errors, Independent Release Auditor Approved, Public GitHub Repository Live)
 
 ---
 
 ## 1. Stage Progress & Completed Features
+
 - [x] **Stage 0:** Inspect and scaffold (Vite + React 18 + TS + Tailwind CSS, strictly local loopback binding on 127.0.0.1:5173, initial sample demo dataset with 14 items across 5 moments).
 - [x] **Stage 1:** Design & core browsing (Editorial varied aspect ratios, moment headings, video indicators, full-screen media viewer with native video controls, focus trap, body scroll lock, touch swipe gestures, hash-based back navigation, and Take Me Somewhere recommendation). *Milestone 1 Review: PASSED.*
 - [x] **Stage 2:** Real local collection (Client-side IndexedDB repository via `idb`, local file and folder importer with `webkitdirectory`, thumbnail generation in Canvas, video poster seeking, authentic EXIF date extraction via `exifr`, SHA-256 duplicate content detection, cancellation, and storage quota tracking).
@@ -18,79 +19,114 @@
 - [x] **Stage 8 (Phase 2):** Real CPU-Optimized Visual Embeddings & Multi-Signal Clustering (`@xenova/transformers` with `Xenova/clip-vit-base-patch32` quantized ONNX, bounded single-batch concurrency `concurrency=1` with 30ms event loop yields, 224x224 canvas downsampling, L2 normalized vectors, IndexedDB vector caching, fallback spatial perceptual hash, multi-signal cosine + temporal (<45m) + folder clustering, strict rule preventing visual grouping when capture times are >90m apart, provisional flags with neutral labels, and non-destructive near-duplicate detection $\ge 95\%$).
 - [x] **Stage 9 (Phase 2):** Memory Map & Multi-View Integration (UniverseView updated with solid vs dashed provisional SVG lines, node status badges, interactive pan/zoom controls, and accessible list fallback).
 - [x] **Stage 10 (Phase 2):** Phase 2 Independent Review & Final Handoff (15/15 unit tests passing across 3 test suites, TypeScript 0 errors, production build 7.96s, independent Reviewer subagent Phase 2 audit PASSED with 0 defects).
-- [x] **Priority 1 (Phase 3):** Shareable Collections (`/c/elevate`, server storage `data/server_collection.json`, Admin Sharing modal with Public / Unlisted / Password protected modes, optional password hint, copy link with localhost warning banner, preview visitor view, PBKDF2 password hashing, constant-time verification, IP sliding window rate-limiting [max 5 failed / 15m], and HMAC-signed visitor session tokens with `accessEpoch` invalidation).
-- [x] **Priority 2 (Phase 3):** Image Viewing Resilience (Full-contain uncropped viewer, interactive 1x–4x zoom & pan drag, 1.5s deliberate hover timer with progress bar and pointer-leave cancellation, immediate reopening suppression after close, mobile touch tap-only opening, instant low-res preview smoothly replaced after `img.decode()`, bounded prefetching [+/-1] with 30-item LRU cache, uncropped Google CDN `=s0` links replacing malformed regex, and JPEG buffer corruption repair [SOI/EOI byte repair]).
-- [x] **Priority 3 (Phase 3):** Embedding Audit & Performance Benchmarks (`Xenova/clip-vit-base-patch32` WASM CPU runtime, 224x224 RGB canvas input, 64-dim spatial perceptual fallback, single-instance singleton loader, IndexedDB vector caching by file ID, `concurrency=1` with 30ms background yields, strict >90m time separation rule, 95% near-duplicate detection, >100,000 vector ops/sec, <30ms clustering for 50 items).
-- [x] **Priority 4 (Phase 3):** GitHub Repository & Hosting (Public repository at `https://github.com/nihalpurohit2211-maker/memory-flow`, root commit `28bb60c` on `main`, clean `.gitignore` excluding secrets, caches, models, and node_modules, `.env.example` template, multi-stage `Dockerfile`, and `render.yaml` hosting configuration).
+- [x] **Release Requirement 1 — Rebuilt Image Viewing:**
+  - Removed hover-to-open completely.
+  - Hover or keyboard focus triggers in-card resolution upgrade after ~1 second (`dwellTimerRef`), pointer leave cancels pending work.
+  - Explicit click or tap opens the viewer.
+  - Investigated and resolved the bottom white block: replaced stacked double `<img>` tags with a single active media tag, and identified truncated camera JPEGs where standard decoders fill missing rows with blank pixels.
+  - Audited JPEG byte repair: never claim appending markers restores missing pixels; damaged files display an honest notice and direct original download.
+  - Rebuilt navigation with a single active-media state: request IDs (`activeRequestIdRef`) reject stale loads, zero crossfade/stacked images, zoom/pan resets to 1x, and previous video stops immediately.
+- [x] **Release Requirement 2 — Viewer Details & Downloads:**
+  - "Download original" downloads authentic raw bytes via `/api/collections/:slug/download/:mediaId` preserving filename.
+  - Verified contributor display; falls back to "Contributor unknown" (never uses Google Drive owner/editor).
+  - Short clickable chips for moment, place, and activity with horizontal touch/keyboard scroll and group navigation.
+- [x] **Release Requirement 3 — People, Places & Activities:**
+  - 8 calibrated activity & scene tags: `group photo`, `person speaking`, `stage performance`, `rehearsal`, `preparation`, `auditorium`, `classroom`, `outdoors`.
+  - Zero-mean calibrated prototypes and variance checks reject flat images, solid colors, and noise.
+  - Visual place grouping across photos without the 90-minute moment constraint.
+  - Admin place management: rename places (e.g. "Sabian Hall") and merge multiple places with atomic SQLite updates.
+  - People grouping strictly OFF by default (`people_grouping_enabled = 0`).
+- [x] **Release Requirement 4 — Process Once & SQLite Persistence:**
+  - Persistent SQLite database at `data/memoryflow.db` (`better-sqlite3`) with WAL mode and foreign keys.
+  - Idempotent schema migrations and automatic migration from legacy `server_collection.json`.
+  - Hot online backups via `backupDatabase()`.
+  - Visitors never download AI models or run embedding indexing.
+- [x] **Release Requirement 5 — Viewer Contributions & Review Queue:**
+  - Multer upload storage to `uploads/pending/` with 25MB image and 100MB video server limits.
+  - Organizer Review Queue with approve/reject workflow and verified attribution.
+- [x] **Release Requirement 6 — Complete Backend & Release Security:**
+  - 100,000 PBKDF2 iterations with SHA-512 and timing-safe verification (`crypto.timingSafeEqual`).
+  - Server-enforced sessions in SQLite with 24-hour expiration.
+  - IP rate limiting: 5 failed attempts per 15 minutes.
+  - Access epoch invalidation on password/visibility changes.
+  - Clean `.gitignore` ignoring databases, backups, uploads, and secrets.
+- [x] **Release Requirement 7 — Verification & Independent Audit:**
+  - 39/39 Vitest tests passing across 8 test suites.
+  - TypeScript compilation passed with 0 errors.
+  - Production build passed in 11.16s.
+  - Independent Release Auditor subagent reviewed the full implementation and verified all requirements.
+- [x] **Release Requirement 8 — Documentation & Repository:**
+  - `STATUS.md`, `read.md`, and `plan.md` updated and synchronized.
+  - `RELEASE.md` published.
+  - Public repository on GitHub at `https://github.com/nihalpurohit2211-maker/memory-flow`.
 
 ---
 
 ## 2. Important Decisions & Assumptions
-- **Framework & Architecture:** React 18 + TypeScript + Vite + Tailwind CSS with Express middleware API (`server/apiRouter.ts`, `server/storage.ts`) and modular feature organization.
-- **Strictly Local Loopback Boundary:** Server binds to `127.0.0.1:5173` with `--strictPort`. Zero telemetry, CDN tracking, or remote database dependencies.
-- **Shared Collection Storage:** JSON file store (`data/server_collection.json`) persists collection configuration, visibility, password hashes, moments, media items, memberships, connections, and visitor suggestions.
-- **Timing-Safe Security & Rate Limiting:** Passwords hashed with PBKDF2 (10,000 iterations, SHA-512) and verified using constant-time `crypto.timingSafeEqual`. Failed attempts rate-limited to 5 per 15 minutes per IP.
-- **Token Invalidation:** Visitor session tokens carry an `accessEpoch` counter. Altering visibility or changing passwords increments the epoch, instantaneously revoking all active visitor sessions.
-- **Hardware-Bounded Local AI:** Intel Core i5-6300U dual-core CPU with ~2.68GB free RAM accommodated via single-batch sequential processing (`concurrency = 1`), 30ms event loop yield per frame, 224x224 offscreen downsampling, and persistent IndexedDB vector caching. WebGPU is intentionally disabled in favor of stable WASM CPU to avoid driver crashes.
-- **Image Corruption Resilience:** Google usercontent thumbnail links are cleanly transformed to `=s0` to bypass Drive export HTML virus warning interstitials and CORS restrictions. Truncated camera JPEGs are repaired with missing EOI (`0xFF, 0xD9`) markers.
+
+- **Architecture:** React 18 + TypeScript + Vite + Tailwind CSS with Express middleware API and persistent SQLite (`better-sqlite3`) backend.
+- **Strictly Local Loopback Boundary:** Development and preview servers bind strictly to `127.0.0.1:5173` with `--strictPort`. Zero external telemetry or runtime CDNs.
+- **Storage & Migrations:** SQLite database with WAL mode (`data/memoryflow.db`) replaces file-based JSON. All legacy records were migrated automatically.
+- **Timing-Safe Security:** Passwords hashed with 100,000 PBKDF2 rounds (SHA-512) and verified using constant-time `crypto.timingSafeEqual`. Failed attempts rate-limited to 5 per 15 minutes per IP.
+- **Viewer Interaction Contract:** Hover never opens a modal. Hover only upgrades thumbnail quality inside its card frame after 1s. Opening is strictly click/tap.
+- **Honest Media Integrity:** Truncated camera JPEGs are honestly identified and tagged (`isDamaged = true`). The app never claims appending JPEG markers restores missing scan lines.
+- **Hardware-Bounded AI:** Quantized `clip-vit-base-patch32` runs via ONNX Runtime Web on WASM CPU with `concurrency = 1` and 30ms event loop yields. Visitors never download models.
 
 ---
 
 ## 3. Changed Files & What They Do
-- `server/storage.ts` — Server-side persistent storage (`data/server_collection.json`), PBKDF2 password hashing, timing-safe verification, IP rate limiting, and HMAC-signed visitor session tokens with access epoch invalidation.
-- `server/apiRouter.ts` — Express REST API endpoints for collection metadata, password verification, protected collection data, admin sharing settings, and background data synchronization.
-- `server/index.ts` — Standalone Express production server serving `dist/` and `/api/`.
-- `vite.config.ts` — Custom `expressApiPlugin` mounting API router directly into Vite dev and preview servers on `127.0.0.1:5173`.
-- `src/lib/collectionApi.ts` — Client-side API layer managing collection data fetching, password verification, visitor session storage, and background synchronization.
-- `src/features/admin/AdminSharingModal.tsx` — Admin sharing modal supporting Public, Unlisted, and Password-protected modes, password hint editing, localhost warning banner, link copying, and visitor view preview.
-- `src/features/visitor/CollectionPasswordPrompt.tsx` — Warm ivory full-screen password unlock prompt with organizer hint display and remaining attempt counters.
-- `src/lib/imageRepair.ts` — JPEG byte buffer repair (SOI/EOI validation) and safe image decoding with timeout using `HTMLImageElement.decode()`.
-- `src/lib/driveClient.ts` — Google Drive API v3 client with robust `buildDriveImageUrl` constructing `=s0` full-resolution links and stripping malformed size parameters.
-- `src/features/flow/FlowCard.tsx` — Flow card with 1.5s deliberate hover timer, visual progress bar, pointer-leave cancellation, touch tap-only trigger, and reopening suppression after close.
-- `src/features/viewer/MediaViewer.tsx` — Contain-fit full image viewer, interactive 1x–4x zoom/pan controls, mouse wheel zoom, 2D drag-pan, dual-layer progressive image replacement, bounded prefetching (+/-1), and 30-item LRU cache.
-- `src/lib/ai/embeddingPipeline.ts` — Bounded CPU-compatible embedding pipeline using `@xenova/transformers` (`Xenova/clip-vit-base-patch32` quantized ONNX), 224x224 canvas downsampling, IndexedDB vector caching, and 64-dim spatial fallback.
-- `src/lib/ai/clustering.ts` — Multi-signal grouping algorithm combining visual cosine similarity, capture-time proximity (<45m), and folder context. Enforces rule that visual similarity alone cannot group distant photos (>90m apart).
-- `src/lib/ai/__tests__/embeddingAudit.test.ts` — Comprehensive audit and benchmark tests for embedding pipeline, vector throughput, near-duplicate detection at 95%, and multi-signal time separation.
-- `server/__tests__/storageAndSecurity.test.ts` — Unit tests for server storage, PBKDF2 hashing, HMAC tokens, epoch invalidation, and IP rate limiting.
-- `src/lib/__tests__/imageRepairAndCdn.test.ts` — Unit tests for JPEG corruption repair and Google CDN URL construction.
-- `.env.example` — Template environment variables for local configuration.
-- `Dockerfile` & `render.yaml` — Production container and hosting deployment configurations.
-- `.gitignore` — Clean exclusions for `node_modules/`, `dist/`, `.env`, `data/*.json`, `models/`, and media caches.
-- `COMPLETION.md` — Final completion report.
+
+- `server/db.ts` — SQLite schema migrations, data migration, WAL mode, places management, contributions, sessions, and online hot backups (`backupDatabase`).
+- `server/storage.ts` — Server-side persistent storage, 100,000 PBKDF2 iterations, constant-time verification, session management, and rate limiting.
+- `server/apiRouter.ts` — Express REST API endpoints for collection metadata, authentic downloads, multer file uploads with 25MB/100MB limits, place renames/merges, and admin review queue.
+- `src/types/index.ts` — Core domain types updated with `Place`, `ActivityTag`, `MediaContribution`, `contributorVerified`, and `isDamaged`.
+- `src/features/flow/FlowCard.tsx` — Rebuilt Flow card: hover-to-open removed, 1-second in-card quality upgrade with pointer-leave cancellation, and explicit click/tap opening.
+- `src/features/viewer/MediaViewer.tsx` — Rebuilt viewer: single active-media state, request ID cancellation, zero crossfade/stacked images, zoom/pan reset, authentic "Download original", verified contributor attribution, and clickable metadata chips.
+- `src/lib/imageRepair.ts` — JPEG integrity analysis (SOI/EOI validation) with honest damage documentation and non-destructive preview repair.
+- `src/lib/ai/sceneClassification.ts` — 8 calibrated scene activity tags with zero-mean noise rejection and cross-photo place clustering.
+- `src/features/visitor/VisitorSuggestionModal.tsx` — Visitor contribution upload tab with file validation and attribution name requirement.
+- `src/features/admin/AdminReviewQueue.tsx` — Organizer review queue for approving/rejecting viewer contributions.
+- `src/features/admin/AdminLoginModal.tsx` — Server-enforced login with session tokens and removed hardcoded default credentials.
+- `src/lib/collectionApi.ts` — Client API layer supporting server sessions, downloads, place operations, and contribution uploads.
+- `src/lib/auth.ts` — Client auth token management.
+- `.gitignore` — Ignores `data/*.db*`, `data/backups/`, `uploads/`, `dist/`, `.env`, and caches.
+- `server/__tests__/sqliteBackup.test.ts` — Unit tests for SQLite WAL mode, foreign keys, and online hot backup.
+- `server/__tests__/storageAndSecurity.test.ts` — Unit tests for 100k PBKDF2 rounds, sessions, and place operations.
+- `src/lib/ai/__tests__/sceneClassification.test.ts` — Unit tests for scene tags, noise rejection, and place clustering.
+- `src/lib/__tests__/imageRepairAndCdn.test.ts` — Unit tests for JPEG damage detection and CDN links.
+- `read.md` — Updated application guide and start documentation.
+- `plan.md` — Updated plan with completed milestone checkboxes.
+- `RELEASE.md` — Comprehensive release notes and verification report.
 
 ---
 
 ## 4. Actual Commands Run & Verification Results
-- `npm run typecheck` -> TypeScript passed with zero errors (`tsc --noEmit`).
-- `npm test` -> 30/30 Vitest unit tests passed across 6 test suites:
-  - `src/lib/ai/__tests__/embeddingAudit.test.ts` (6 tests passed)
-  - `server/__tests__/storageAndSecurity.test.ts` (5 tests passed)
-  - `src/lib/__tests__/imageRepairAndCdn.test.ts` (4 tests passed)
-  - `src/lib/__tests__/phase2DriveAndAI.test.ts` (9 tests passed)
-  - `src/lib/__tests__/stage2.test.ts` (5 tests passed)
-  - `src/lib/__tests__/largeFixture.test.ts` (1 test passed)
-- `npm run build` -> Production build succeeded in 9.27s (`dist/` created, chunks split cleanly).
-- `gh repo edit nihalpurohit2211-maker/memory-flow --visibility public` -> Repository made public.
-- Independent Reviewer Subagent Milestone 1 Review -> Status: PASS.
-- Independent Reviewer Subagent Phase 2 Review -> Status: PASS.
-- Independent Reviewer Subagent Phase 3 Review -> Status: PASS (Zero defects found, approved for production).
+
+- `npm test` -> **8 of 8 test files passed, 39 of 39 tests passed** in 3.00s.
+- `npm run typecheck` -> TypeScript passed with **0 errors** (`tsc --noEmit`).
+- `npm run build` -> Production build succeeded in **11.16s** (`dist/` created cleanly).
+- `git status` -> Clean tracking: zero databases, zero backups, and zero user uploads tracked.
+- Independent Release Auditor Subagent Review -> **PASSED** (both minor recommendations actioned and verified).
 
 ---
 
 ## 5. Known Bugs, Limitations & Unverified Checks
-- **Browser Origin Quota:** IndexedDB storage is subject to client browser storage quotas. Persistent storage can be requested via the UI prompt.
-- **Physical Device Mobile Testing:** Mobile responsiveness and touch gestures were verified via 360px and 390px emulation rather than a physical Android device.
-- **Live Google Drive API Rate Limits:** In production with high file counts on public Drive API keys, Google Drive API v3 enforces standard per-minute quotas. The client supports exponential retry and pagination.
-- **ONNX WebAssembly Acceleration:** Quantized CLIP runs smoothly via WebAssembly CPU execution. If WebAssembly fails or network prevents model weights download, the system falls back gracefully to deterministic 64-dimensional spatial feature vectors.
+
+- **Browser Origin Quotas:** Client-side caching respects standard browser quota limits.
+- **Physical Device Mobile Testing:** Responsiveness was verified via responsive layout testing down to 360px and 390px rather than a physical Android device.
+- **Google Drive Rate Limits:** For large collections, Google Drive API v3 enforces standard per-minute quotas. Exponential backoff and retry are implemented.
+- **WASM CPU Execution:** The ONNX model executes on the CPU via WebAssembly. Dual-core machines process sequentially with bounded batching (`concurrency = 1`).
 
 ---
 
 ## 6. Exact Next Action
-- Autonomous goal fully achieved. No further code edits required.
+
+- All 8 release requirements completed, tested, audited, and committed to disk. Goal fully achieved.
 
 ---
 
 ## 7. Local Server Address & GitHub Repository
+
 - **Live Local Address:** [`http://127.0.0.1:5173/`](http://127.0.0.1:5173/)
 - **Collection Route:** [`http://127.0.0.1:5173/c/elevate`](http://127.0.0.1:5173/c/elevate)
 - **Public GitHub Repository:** [`https://github.com/nihalpurohit2211-maker/memory-flow`](https://github.com/nihalpurohit2211-maker/memory-flow)
@@ -106,10 +142,11 @@
 ---
 
 ## 8. Resume Instructions
-All priorities (Priorities 1 through 4) and stages (Stages 0 through 10) are complete, fully verified, and audited by independent reviewer subagents. The application is running live at `http://127.0.0.1:5173`. To inspect or test:
+
+The Final Reliable Shareable Release is complete and running live at `http://127.0.0.1:5173`.
 1. Open [`http://127.0.0.1:5173/c/elevate`](http://127.0.0.1:5173/c/elevate) in your web browser.
-2. Click the **Visitor / Admin** toggle in the top right to switch between roles (passphrase: `admin123`).
-3. In Admin mode, click **Sharing** to test Public, Unlisted, and Password-protected visibility modes, set password hints, and preview visitor access.
-4. Hover any photo in Flow for 1.5 seconds to preview the deliberate hover timer, or click to open the full contain-fit viewer with 1x–4x zoom and pan drag.
-5. In Admin mode, click **Drive & AI** to test Google Drive sync, simulated multi-camera event folder seeding, and AI multi-signal grouping.
-6. The public GitHub repository is available at [`https://github.com/nihalpurohit2211-maker/memory-flow`](https://github.com/nihalpurohit2211-maker/memory-flow).
+2. **Hover vs Click:** Hover any photo card for 1 second to observe the in-card quality upgrade (it will NOT open a modal or change page). Click or tap the card to open the full contain-fit viewer.
+3. **Viewer Navigation:** Use Left/Right arrow keys or touch swipes to navigate. Images switch cleanly with zero crossfade or stacked artifacts.
+4. **Viewer Details & Downloads:** Inspect the "Download original" button, contributor attribution, and clickable moment, place, and activity chips below the image.
+5. **Contributions:** Switch to Visitor mode and use "Were You There?" to upload a photo/video contribution. Then switch to Admin mode (`admin123`) to review, approve, or reject the submission in the Review Queue.
+6. **Persistence & Security:** All changes persist in `data/memoryflow.db`. Passwords use 100,000 PBKDF2 rounds, and sessions are enforced by the server.

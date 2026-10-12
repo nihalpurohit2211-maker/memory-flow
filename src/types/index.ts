@@ -39,11 +39,68 @@ export interface MediaItem {
   driveParentFolderId?: string;
   caption?: string | null;
   mediaBlob?: Blob;
+  // Provenance & Contributor
+  contributorName?: string | null;
+  contributorVerified?: boolean;
+  // Integrity & Damage indication
+  isDamaged?: boolean;
+  damageNotes?: string | null;
+  // Categorical tags
+  places?: string[];
+  activities?: string[];
+  people?: string[];
   // AI visual embedding status
   embeddingStatus?: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
   embeddingVector?: number[];
   nearDuplicateOfId?: string | null;
   nearDuplicateSimilarity?: number;
+}
+
+export interface Place {
+  id: string;
+  name: string;
+  labelSource: 'organizer' | 'ai_suggested';
+  isConfirmed: boolean;
+  coverMediaId?: string | null;
+  mediaCount?: number;
+}
+
+export interface ActivityTag {
+  id: string;
+  name: string;
+  confidence: number;
+  isConfirmed: boolean;
+  modelInfo?: string;
+}
+
+export interface PersonGroup {
+  id: string;
+  label: string; // Unnamed initially: e.g. "Person Group A"
+  isConfirmed: boolean;
+  consented: boolean;
+  mediaIds: string[];
+}
+
+export interface MediaChip {
+  type: 'moment' | 'place' | 'activity' | 'person';
+  id: string;
+  label: string;
+  isConfirmed?: boolean;
+}
+
+export interface MediaContribution {
+  id: string;
+  collectionSlug: string;
+  contributorName: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  storagePath: string;
+  targetMomentId?: string | null;
+  notes?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  reviewedAt?: string | null;
 }
 
 export interface Moment {
@@ -168,6 +225,7 @@ export interface SharedCollectionInfo {
   visibility: CollectionVisibility;
   passwordHint: string | null;
   requiresPassword: boolean;
+  peopleGroupingEnabled: boolean;
   updatedAt: string;
 }
 

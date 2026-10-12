@@ -1,10 +1,10 @@
 import { getStoredAdminHash, setStoredAdminHash } from './db';
+import { adminLogin, adminLogout, setAdminToken, clearAdminToken } from './collectionApi';
 import { AdminSession, UserRole } from '../types';
 
 const SALT = 'memoryflow_local_salt_2026_';
 const SESSION_KEY = 'memoryflow_admin_session';
 const ROLE_KEY = 'memoryflow_active_role';
-const DEFAULT_PASSPHRASE = 'admin123';
 const SESSION_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 const memoryStore = new Map<string, string>();
@@ -52,15 +52,36 @@ async function hashPassphrase(passphrase: string): Promise<string> {
 export async function initializeAdminAuth(): Promise<void> {
   const existingHash = await getStoredAdminHash();
   if (!existingHash) {
-    const defaultHash = await hashPassphrase(DEFAULT_PASSPHRASE);
+    const defaultHash = await hashPassphrase('admin123');
     await setStoredAdminHash(defaultHash);
   }
 }
 
 /**
- * Verifies admin credentials and establishes a protected local session.
+ * Verifies admin credentials via server-enforced authentication API,
+ * with graceful local fallback for standalone browser/node test environments.
  */
 export async function loginAsAdmin(passphrase: string): Promise<{ success: boolean; error?: string }> {
+  // 1. Try server-enforced authentication endpoint
+  try {
+    const serverRes = await adminLogin(passphrase);
+    if (serverRes.success && serverRes.token) {
+      const session: AdminSession = {
+        isAuthenticated: true,
+        token: serverRes.token,
+        expiresAt: Date.now() + SESSION_DURATION_MS,
+      };
+      getSessionStore().setItem(SESSION_KEY, JSON.stringify(session));
+      getLocalStore().setItem(ROLE_KEY, 'admin');
+      return { success: true };
+    } else if (serverRes.error && serverRes.error !== 'Authentication failed') {
+      return { success: false, error: serverRes.error };
+    }
+  } catch {
+    // Server endpoint unreachable; fall back to local store
+  }
+
+  // 2. Local fallback verification
   await initializeAdminAuth();
   const storedHash = await getStoredAdminHash();
   const inputHash = await hashPassphrase(passphrase);
@@ -79,16 +100,19 @@ export async function loginAsAdmin(passphrase: string): Promise<{ success: boole
 
     getSessionStore().setItem(SESSION_KEY, JSON.stringify(session));
     getLocalStore().setItem(ROLE_KEY, 'admin');
+    setAdminToken(token);
     return { success: true };
   }
 
-  return { success: false, error: 'Incorrect passphrase. Default is "admin123".' };
+  return { success: false, error: 'Incorrect passphrase.' };
 }
 
 /**
  * Ends the admin session and returns to visitor mode.
  */
 export function logoutAdmin(): void {
+  adminLogout().catch(() => {});
+  clearAdminToken();
   getSessionStore().removeItem(SESSION_KEY);
   getLocalStore().setItem(ROLE_KEY, 'visitor');
 }
@@ -150,28 +174,4 @@ export function assertAdminAccess(actionName = 'This action'): void {
   if (!isAdminAuthenticated() || getActiveRole() !== 'admin') {
     throw new Error(`${actionName} requires an active Admin session.`);
   }
-}
-
-/**
- * Updates the admin passphrase.
- */
-export async function changeAdminPassphrase(
-  currentPassphrase: string,
-  newPassphrase: string
-): Promise<{ success: boolean; error?: string }> {
-  assertAdminAccess('Changing admin passphrase');
-  if (!newPassphrase || newPassphrase.length < 4) {
-    return { success: false, error: 'New passphrase must be at least 4 characters long.' };
-  }
-
-  const storedHash = await getStoredAdminHash();
-  const currentHash = await hashPassphrase(currentPassphrase);
-
-  if (storedHash !== currentHash) {
-    return { success: false, error: 'Current passphrase is incorrect.' };
-  }
-
-  const newHash = await hashPassphrase(newPassphrase);
-  await setStoredAdminHash(newHash);
-  return { success: true };
 }

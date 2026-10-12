@@ -1,27 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { repairJpegBuffer } from '../imageRepair';
+import { repairJpegBuffer, checkJpegIntegrity } from '../imageRepair';
 import { buildDriveImageUrl } from '../driveClient';
 
-describe('Priority 2 — Image Repair & CDN URLs', () => {
-  it('appends missing EOI marker (0xFF, 0xD9) to truncated JPEG streams', () => {
+describe('Image Integrity, Damage Detection & CDN URLs', () => {
+  it('detects truncated JPEGs and reports honest damage status without claiming restoration', () => {
     // Valid SOI (0xFF, 0xD8), some bytes, but NO EOI at end
     const truncatedJpeg = new Uint8Array([0xFF, 0xD8, 0x12, 0x34, 0x56, 0x78]);
-    const repaired = repairJpegBuffer(truncatedJpeg);
+    const integrity = checkJpegIntegrity(truncatedJpeg);
 
-    expect(repaired.length).toBe(truncatedJpeg.length + 2);
-    expect(repaired[0]).toBe(0xFF);
-    expect(repaired[1]).toBe(0xD8);
-    // Repaired ends with 0xFF, 0xD9
-    expect(repaired[repaired.length - 2]).toBe(0xFF);
-    expect(repaired[repaired.length - 1]).toBe(0xD9);
+    expect(integrity.isValid).toBe(false);
+    expect(integrity.isTruncated).toBe(true);
+    expect(integrity.hasValidSoi).toBe(true);
+    expect(integrity.hasValidEoi).toBe(false);
+    expect(integrity.notes).toContain('incomplete scan data');
   });
 
-  it('preserves already valid JPEGs having both SOI and EOI markers', () => {
+  it('validates intact JPEGs having both SOI and EOI markers', () => {
     const validJpeg = new Uint8Array([0xFF, 0xD8, 0x11, 0x22, 0xFF, 0xD9]);
-    const result = repairJpegBuffer(validJpeg);
+    const integrity = checkJpegIntegrity(validJpeg);
 
-    expect(result.length).toBe(validJpeg.length);
-    expect(result).toEqual(validJpeg);
+    expect(integrity.isValid).toBe(true);
+    expect(integrity.isTruncated).toBe(false);
+    expect(integrity.hasValidSoi).toBe(true);
+    expect(integrity.hasValidEoi).toBe(true);
+  });
+
+  it('appends in-memory EOI marker for preview buffer without modifying original file', () => {
+    const truncated = new Uint8Array([0xFF, 0xD8, 0x12, 0x34]);
+    const previewBuffer = repairJpegBuffer(truncated);
+
+    expect(previewBuffer.length).toBe(truncated.length + 2);
+    expect(previewBuffer[previewBuffer.length - 2]).toBe(0xFF);
+    expect(previewBuffer[previewBuffer.length - 1]).toBe(0xD9);
+    // Original truncated array is unchanged
+    expect(truncated.length).toBe(4);
   });
 
   it('strips junk prefix bytes before SOI marker', () => {
@@ -35,7 +47,6 @@ describe('Priority 2 — Image Repair & CDN URLs', () => {
   });
 
   it('buildDriveImageUrl correctly formats Google CDN URLs without stacking size parameters', () => {
-    // Thumbnail link with existing =s220
     const rawUrl = 'https://lh3.googleusercontent.com/d/1A2B3C4D5E=s220';
     
     // Low res (200)

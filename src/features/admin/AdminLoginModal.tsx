@@ -95,9 +95,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               />
               <KeyRound className="w-4 h-4 text-text/40 absolute left-3.5 top-3" />
             </div>
-            <p className="mt-1.5 text-xs text-text/50">
-              Default local passphrase: <span className="font-mono font-medium text-accent">admin123</span>
-            </p>
           </div>
 
           {error && (

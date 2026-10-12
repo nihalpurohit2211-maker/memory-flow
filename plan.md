@@ -148,8 +148,16 @@ Phase 2 updates the scope per user prompt:
 - [x] Stage 8: CPU-optimized visual embeddings & multi-signal clustering
 - [x] Stage 9: Memory Map & multi-view integration
 - [x] Stage 10: Verification, Reviewer check & COMPLETION.md handoff
+- [x] Priority 1 (Phase 3): Shareable Collections & Server Persistence (/c/elevate, SQLite better-sqlite3 database data/memoryflow.db, Admin Sharing modal with Public/Unlisted/Password-protected modes, password hint, 100k PBKDF2 iterations, IP sliding rate-limits, HMAC-signed visitor tokens).
+- [x] Priority 2 (Phase 3): Image Viewing Resilience & Navigation (Removed hover-to-open; 1s in-card upgrade with cancellation; explicit click/tap; single active-media state with request IDs; zero crossfade/stacked images; uncropped contain-fit viewer; interactive zoom/pan; authentic byte downloads; fixed bottom white block; honest JPEG corruption handling).
+- [x] Priority 3 (Phase 3): People, Places & Scene Classification (8 activity/scene tags: group photo, person speaking, stage performance, rehearsal, preparation, auditorium, classroom, outdoors with calibrated zero-mean prototypes and noise rejection; cross-photo place grouping without 90m rule; admin rename/merge places; people grouping OFF by default).
+- [x] Priority 4 (Phase 3): Process Once & Shared Server-Side Results (Persistent SQLite database with schema migrations; automatic migration from legacy json; online hot backups; visitors never download AI models or run indexing).
+- [x] Priority 5 (Phase 3): Viewer Contributions & Review Queue (Multer uploads to uploads/pending/ with 25MB image / 100MB video server limits; organizer review queue with approve/reject workflow; verified contributor attribution).
+- [x] Priority 6 (Phase 3): Complete Backend & Release Security (Timing-safe authentication, 100k PBKDF2 rounds, server sessions in SQLite, access epoch token invalidation, no secrets in git repo).
+- [x] Priority 7 (Phase 3): Test Suite & Production Verification (39/39 Vitest tests passing across 8 test suites; TypeScript clean with 0 errors; production build succeeds in 10-11s).
+- [x] Priority 8 (Phase 3): Documentation & Release Signoff (STATUS.md, read.md, plan.md updated; RELEASE.md published; public GitHub repo live).
 
-Decisions: Phase 2 completed. Google Drive configured with read-only progressive streaming and LRU cache. Real local CPU-compatible visual embeddings (@xenova/transformers with CLIP ONNX quantized + perceptual spatial fallback) and multi-signal clustering ("One moment, many cameras"). Web Crypto SHA-256 salted hash session security with separate Admin/Visitor views and suggestion approval queue. Zero Drive uploads from visitors.
-Evidence: 15/15 Vitest tests passing across 3 test suites, TypeScript clean (0 errors), production build passed (7.96s), and independent Reviewer subagent Phase 2 audit PASSED with zero defects.
+Decisions: Completed all 8 release requirements. Image viewing rebuilt with single active state, request cancellation, in-card 1s quality upgrade on hover, and authentic original downloads. Persistent SQLite backend (better-sqlite3) with WAL mode, schema migrations, online backups, and server-enforced admin sessions. 8 calibrated scene activity tags and cross-photo place grouping. Zero models downloaded by visitors. Public GitHub repository live with clean .gitignore.
+Evidence: 39/39 Vitest tests passing across 8 test suites, TypeScript clean (0 errors), production build passed (11.16s), and independent Release Auditor subagent review PASSED.
 Blockers: None.
-Next action: None. MemoryFlow is complete, fully verified, and running live at http://127.0.0.1:5173/.
+Next action: None. MemoryFlow Final Reliable Shareable Release is complete, verified, and running live at http://127.0.0.1:5173/.

@@ -8,15 +8,6 @@ interface FlowCardProps {
   layoutVariant?: 'hero' | 'tall' | 'wide' | 'standard';
 }
 
-// Global tracking to prevent immediate reopening after closing until a new deliberate hover/focus
-let recentlyClosedMediaId: string | null = null;
-let recentlyClosedTimestamp: number = 0;
-
-export function recordViewerClosed(mediaId: string): void {
-  recentlyClosedMediaId = mediaId;
-  recentlyClosedTimestamp = Date.now();
-}
-
 function formatDuration(seconds: number | null): string {
   if (seconds === null || seconds === undefined) return '';
   const mins = Math.floor(seconds / 60);
@@ -42,81 +33,69 @@ export const FlowCard: React.FC<FlowCardProps> = ({
   layoutVariant = 'standard',
 }) => {
   const isVideo = media.mimeType.startsWith('video/') || media.duration !== null;
-  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isSuppressedRef = useRef<boolean>(false);
-  const [isHovering, setIsHovering] = useState<boolean>(false);
+  const dwellTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Clean up timer on unmount
+  // Progressive in-card image resolution state
+  const initialSource = media.lowResUrl || media.thumbnailUrl;
+  const [currentSrc, setCurrentSrc] = useState<string>(initialSource);
+  const [isUpgraded, setIsUpgraded] = useState<boolean>(false);
+
+  // Reset image if media changes
+  useEffect(() => {
+    setCurrentSrc(media.lowResUrl || media.thumbnailUrl);
+    setIsUpgraded(false);
+  }, [media.id, media.thumbnailUrl, media.lowResUrl]);
+
+  // Clean up dwell timer on unmount
   useEffect(() => {
     return () => {
-      if (hoverTimerRef.current) {
-        clearTimeout(hoverTimerRef.current);
+      if (dwellTimerRef.current) {
+        clearTimeout(dwellTimerRef.current);
       }
     };
   }, []);
 
-  const isTouchDevice = () => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(pointer: coarse)').matches;
-  };
-
+  // Hover or focus upgrades image quality inside its existing card after ~1 second
   const handlePointerEnter = () => {
-    if (isTouchDevice()) return; // Mobile: open strictly by tap
+    if (isUpgraded) return;
+    if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
 
-    // Check if this card was just closed to prevent immediate loop reopening
-    const justClosed =
-      recentlyClosedMediaId === media.id && Date.now() - recentlyClosedTimestamp < 1500;
-    if (justClosed || isSuppressedRef.current) {
-      isSuppressedRef.current = true;
-      return;
-    }
-
-    setIsHovering(true);
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-
-    // 1.5 seconds deliberate hover trigger
-    hoverTimerRef.current = setTimeout(() => {
-      setIsHovering(false);
-      onOpen(media.id);
-    }, 1500);
+    // After 1 second of dwell inside card, upgrade to higher resolution thumbnail
+    dwellTimerRef.current = setTimeout(() => {
+      const upgradeUrl = media.thumbnailUrl || media.driveFullUrl;
+      if (upgradeUrl && upgradeUrl !== currentSrc) {
+        const img = new Image();
+        img.onload = () => {
+          setCurrentSrc(upgradeUrl);
+          setIsUpgraded(true);
+        };
+        img.src = upgradeUrl;
+      }
+    }, 1000);
   };
 
   const handlePointerLeave = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
+    // Leaving cancels pending work
+    if (dwellTimerRef.current) {
+      clearTimeout(dwellTimerRef.current);
+      dwellTimerRef.current = null;
     }
-    setIsHovering(false);
-    isSuppressedRef.current = false; // Reset suppression once pointer leaves
   };
 
   const handleFocus = () => {
-    if (isTouchDevice()) return;
-    const justClosed =
-      recentlyClosedMediaId === media.id && Date.now() - recentlyClosedTimestamp < 1500;
-    if (justClosed || isSuppressedRef.current) return;
-
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => {
-      onOpen(media.id);
-    }, 1500);
+    handlePointerEnter();
   };
 
   const handleBlur = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-    isSuppressedRef.current = false;
+    handlePointerLeave();
   };
 
+  // Click/tap explicitly opens the viewer
   const handleClick = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
+    if (dwellTimerRef.current) {
+      clearTimeout(dwellTimerRef.current);
+      dwellTimerRef.current = null;
     }
-    setIsHovering(false);
-    isSuppressedRef.current = false;
     onOpen(media.id);
   };
 
@@ -143,25 +122,15 @@ export const FlowCard: React.FC<FlowCardProps> = ({
       onBlur={handleBlur}
       id={`media-card-${media.id}`}
       aria-label={`View ${media.caption || media.originalName}${isVideo ? ', video' : ''}`}
-      className={`group relative w-full ${spanClass} text-left rounded-xl overflow-hidden bg-surface border border-theme-border shadow-subtle hover:shadow-card hover:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent transition-all duration-200 flex flex-col min-h-[44px]`}
+      className={`group relative w-full ${spanClass} text-left rounded-xl overflow-hidden bg-surface border border-theme-border shadow-subtle hover:shadow-card hover:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent transition-all duration-200 flex flex-col min-h-[44px] cursor-pointer`}
     >
       <div className={`relative w-full ${aspectClass} overflow-hidden bg-background`}>
         <img
-          src={media.thumbnailUrl}
+          src={currentSrc}
           alt={media.caption || media.originalName}
           loading="lazy"
           className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
         />
-
-        {/* 1.5s deliberate hover indicator bar */}
-        {isHovering && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-black/20 overflow-hidden z-10">
-            <div
-              className="h-full bg-accent transition-all duration-[1500ms] ease-linear w-full animate-[progress_1.5s_linear]"
-              style={{ animation: 'progress 1.5s linear forwards' }}
-            />
-          </div>
-        )}
 
         {/* Video indicator badge */}
         {isVideo && (

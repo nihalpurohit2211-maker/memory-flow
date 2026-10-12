@@ -652,6 +652,7 @@ export default function App() {
           moments={moments}
           memberships={memberships}
           connections={connections}
+          collectionSlug={collectionInfo?.slug || 'elevate'}
           onClose={handleCloseMedia}
           onNavigateMedia={handleNavigateMedia}
           onSelectMoment={handleSelectMoment}
@@ -696,6 +697,7 @@ export default function App() {
         onClose={() => setIsReviewQueueOpen(false)}
         moments={moments}
         media={media}
+        collectionSlug={collectionInfo?.slug || 'elevate'}
         onDataUpdated={refreshFromDb}
       />
 
@@ -712,6 +714,7 @@ export default function App() {
           currentMemberships={memberships
             .filter((m) => m.momentId === suggestionTargetMoment.id)
             .map((m) => m.mediaId)}
+          collectionSlug={collectionInfo?.slug || 'elevate'}
           onSuggestionSubmitted={refreshFromDb}
         />
       )}

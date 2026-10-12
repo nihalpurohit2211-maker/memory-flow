@@ -11,6 +11,13 @@ build/
 # Server runtime data & persistent collections (do not commit runtime state or secrets)
 data/server_collection.json
 data/*.json
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/backups/
+
+# Uploaded contributor files
+uploads/
 
 # Local environment and secrets
 .env

@@ -1,4 +1,14 @@
-import { SharedCollectionInfo, Moment, MediaItem, Membership, Connection, VisitorSuggestion, CollectionVisibility } from '../types';
+import {
+  SharedCollectionInfo,
+  Moment,
+  MediaItem,
+  Membership,
+  Connection,
+  Place,
+  VisitorSuggestion,
+  MediaContribution,
+  CollectionVisibility,
+} from '../types';
 
 export function getVisitorToken(slug: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -15,9 +25,26 @@ export function clearVisitorToken(slug: string): void {
   sessionStorage.removeItem(`memoryflow_visitor_token_${slug}`);
 }
 
+export function getAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('memoryflow_admin_token') || sessionStorage.getItem('memoryflow_admin_token');
+}
+
+export function setAdminToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('memoryflow_admin_token', token);
+  sessionStorage.setItem('memoryflow_admin_token', token);
+}
+
+export function clearAdminToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('memoryflow_admin_token');
+  sessionStorage.removeItem('memoryflow_admin_token');
+}
+
 export async function fetchCollectionInfo(slug: string = 'elevate'): Promise<SharedCollectionInfo> {
   const res = await fetch(`/api/collections/${slug}`, {
-    headers: { 'Accept': 'application/json' },
+    headers: { Accept: 'application/json' },
   });
   if (!res.ok) {
     throw new Error(`Failed to load collection info: ${res.statusText}`);
@@ -57,14 +84,21 @@ export async function fetchCollectionData(
   mediaItems: MediaItem[];
   memberships: Membership[];
   connections: Connection[];
+  places?: Place[];
   suggestions: VisitorSuggestion[];
+  contributions?: MediaContribution[];
 }> {
   const token = customToken || getVisitorToken(slug);
+  const adminToken = getAdminToken();
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (adminToken) {
+    headers['x-admin-token'] = adminToken;
   }
 
   const res = await fetch(`/api/collections/${slug}/data`, { headers });
@@ -76,6 +110,54 @@ export async function fetchCollectionData(
     throw new Error(`Failed to fetch collection data: ${res.statusText}`);
   }
   return res.json();
+}
+
+export async function uploadContributorMedia(
+  slug: string,
+  formData: FormData
+): Promise<{ success: boolean; message: string; contributionId?: string }> {
+  const res = await fetch(`/api/collections/${slug}/contributions/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to upload contribution');
+  }
+  return data;
+}
+
+export async function adminLogin(
+  passphrase: string
+): Promise<{ success: boolean; token?: string; error?: string; remainingAttempts?: number }> {
+  const res = await fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passphrase }),
+  });
+
+  const data = await res.json();
+  if (res.ok && data.token) {
+    setAdminToken(data.token);
+    return { success: true, token: data.token };
+  }
+  return {
+    success: false,
+    error: data.error || 'Authentication failed',
+    remainingAttempts: data.remainingAttempts,
+  };
+}
+
+export async function adminLogout(): Promise<void> {
+  const token = getAdminToken();
+  if (token) {
+    await fetch('/api/admin/logout', {
+      method: 'POST',
+      headers: { 'x-admin-token': token },
+    }).catch(() => {});
+  }
+  clearAdminToken();
 }
 
 export async function updateSharingSettings(
