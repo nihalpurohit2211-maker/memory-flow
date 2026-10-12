@@ -1,6 +1,7 @@
 node_modules
 dist
-data/server_collection.json
+data/
+uploads/
 .env
 .git
 .vscode
