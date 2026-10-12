@@ -1,10 +1,17 @@
 # MemoryFlow — Start Here
 
-MemoryFlow is a light, local-only web application for discovering an event through photos and videos. It features Memory Flow, a full-screen photo/video viewer, related moment navigation, Take Me Somewhere discovery, Timeline with authentic capture timestamps, a spatial 2D Memory Universe with accessible list fallback, and in-browser IndexedDB media import.
+MemoryFlow is a light, local-first web application for discovering an event through photos and videos. It features Memory Flow with intentional editorial layouts, full-contain high-res image and video viewing with interactive zoom/pan, deliberate hover pre-activation, related moment navigation, Take Me Somewhere discovery, Timeline with authentic camera capture timestamps, a spatial 2D Memory Map, real local CPU-optimized visual embeddings (`Xenova/clip-vit-base-patch32`), multi-signal grouping ("One moment, many cameras"), and authenticated shareable collections with server-side password enforcement and rate limiting.
 
 ---
 
-## 🚀 Running the Finished App (Verified)
+## 🌐 Public Repository & Links
+- **GitHub Repository (Public):** [https://github.com/nihalpurohit2211-maker/memory-flow](https://github.com/nihalpurohit2211-maker/memory-flow)
+- **Local Application URL:** [http://127.0.0.1:5173/](http://127.0.0.1:5173/)
+- **Direct Collection URL:** [http://127.0.0.1:5173/c/elevate](http://127.0.0.1:5173/c/elevate)
+
+---
+
+## 🚀 Running the App (Verified)
 
 ### 1. Installation
 ```bash
@@ -20,7 +27,7 @@ npm run dev
 
 ### 3. Production Build & Loopback Preview
 ```bash
-# Typecheck TypeScript source
+# Typecheck TypeScript source (0 errors)
 npm run typecheck
 
 # Build optimized production bundle
@@ -30,49 +37,68 @@ npm run build
 npm run preview
 ```
 
-### 4. Automated Test Suite
+### 4. Automated Test Suite (30 Tests Passing)
 ```bash
 npm test
 ```
-Runs the Vitest suite covering SHA-256 duplicate hashing, EXIF fallback extraction, recommendation diversity, and the 1,000-record synthetic performance test.
+Runs the 6 Vitest test suites covering:
+1. `src/lib/ai/__tests__/embeddingAudit.test.ts` — AI model specs, vector ops throughput, near-duplicate detection at 95%, and multi-signal time separation.
+2. `server/__tests__/storageAndSecurity.test.ts` — Server collection storage, PBKDF2 hashing, HMAC visitor tokens, access epoch revocation, and IP rate limiting.
+3. `src/lib/__tests__/imageRepairAndCdn.test.ts` — JPEG byte buffer corruption repair and Google CDN `=s0` uncropped URL construction.
+4. `src/lib/__tests__/phase2DriveAndAI.test.ts` — Google Drive link parsing, EXIF camera timestamps, admin security guards, and multi-camera clustering.
+5. `src/lib/__tests__/stage2.test.ts` — Media processor SHA-256 duplicate content detection and recommendation diversity.
+6. `src/lib/__tests__/largeFixture.test.ts` — 1,000-record synthetic performance test.
 
 ---
 
-## 🔒 Strictly Local-Only Boundary
-- **Zero Cloud/Remote Dependencies:** No cloud database, no analytics, no tracking beacons, no CDN fonts. All styling uses a native system font stack.
-- **Original Media Intact:** Local photos and videos are read via the browser File API into IndexedDB; originals on the user's hard drive are never modified, deleted, or moved.
-- **Strict Loopback Binding:** Both Vite dev and preview servers bind exclusively to `127.0.0.1:5173`. LAN exposure is disabled.
+## 🔒 Security, Roles & Shareable Collections
+
+### 1. Admin Role & Sharing Panel
+- Click the **Visitor / Admin** toggle in the header. Default admin passphrase is `admin123`.
+- In Admin mode, click **Sharing** to manage the collection:
+  - **Public:** Accessible by anyone who navigates to `/c/elevate`.
+  - **Unlisted:** Excluded from public index listings; accessible via link.
+  - **Password Protected:** Requires a passphrase to view collection data, images, and moments.
+  - **Password Hint:** Optional hint displayed on the password prompt.
+  - **Copy Link:** Copies `/c/elevate` with a localhost warning banner.
+  - **Preview Visitor View:** Immediately tests the visitor unlock experience.
+
+### 2. Server-Side Security & Rate Limiting
+- **Password Hashing:** Passwords hashed with PBKDF2 (10,000 iterations, SHA-512) and verified using constant-time `crypto.timingSafeEqual`.
+- **IP Rate Limiting:** Limits failed password attempts to 5 per 15-minute window per IP, returning HTTP 429 with retry cooldown.
+- **HMAC Session Tokens:** Successful unlocks receive an HMAC-signed visitor session token with 12-hour expiry.
+- **Instant Revocation:** Changing visibility or updating the password increments the `accessEpoch`, instantly invalidating all existing visitor tokens.
+- **Credential Protection:** Google Drive API keys, service accounts, and password hashes are never exposed to clients.
 
 ---
 
-## 💾 Local Storage & Persistence Behavior
-- **Storage Medium:** Browser IndexedDB (`memoryflow_local_db`) via `idb`.
-- **Media Ingestion:** Photos and videos generate bounded 640px thumbnails in-canvas and extract authentic camera EXIF dates client-side via `exifr`.
-- **Exact Duplicate Detection:** SHA-256 content hashes prevent duplicate file storage while allowing memberships across multiple moments.
-- **Storage Quota:** Uses `navigator.storage.estimate()` to track available browser quota and prompts for persistent storage without promising external permanence.
+## 🖼️ Image Viewing & Decoder Resilience
+
+- **Contain-Fit Uncropped Full View:** Images open in contain-fit mode (`object-contain`), preserving exact photographic aspect ratios without letterbox distortion or clipping.
+- **Interactive Zoom & Pan (1x to 4x):** Zoom controls in toolbar, keyboard shortcuts (`+`, `-`, `0`), mouse wheel zoom, and 2D drag-panning.
+- **1.5s Deliberate Hover Pre-Activation:** Hovering a thumbnail for 1.5 seconds shows an animated progress bar and opens the viewer. Pointer leave immediately cancels the timer.
+- **Suppression of Reopening Loops:** Closing the viewer suppresses hover re-triggering for 1.5s until a new deliberate hover occurs.
+- **Mobile Touch Optimization:** Touch devices detect `(pointer: coarse)` and require tap-only opening.
+- **Progressive Dual-Layer Display:** Instant thumbnail preview replaced smoothly after asynchronous `HTMLImageElement.decode()`.
+- **Google CDN `=s0` Links:** Direct high-res CDN links bypass Google Drive HTML virus scan pages and CORS restrictions.
+- **JPEG Corruption Repair:** Detects and appends missing EOI (`0xFF, 0xD9`) markers on truncated camera JPEGs.
 
 ---
 
-## 🎯 Verification Evidence Passed
-- **Stage 0:** Scaffolding, loopback binding, and demo data initialization passed.
-- **Stage 1:** Core browsing (Flow → MediaViewer → MomentDetail → Back path) passed independent Milestone 1 review. Focus trap, body scroll lock, video scrubbing guard, and light-theme contrast verified.
-- **Stage 2:** Real local collection with IndexedDB persistence, file/folder importer, progress queue, cancellation, and duplicate detection passed.
-- **Stage 3:** Timeline with authentic EXIF capture time vs. Date unknown segregation, user-supplied date editing, and time-proximity grouping suggestions passed.
-- **Stage 4:** Memory Universe 2D canvas with pan/zoom, deterministic layout, SVG relationship lines, touch support, and accessible list fallback passed.
-- **Stage 5:** Final verification & Milestone 2 review passed with 0 defects.
-- **Stage 6 (Phase 2):** Google Drive v3 integration with read-only streaming, folder crawling, pagination, low-res progressive thumbnails, dwell upgrade, bounded LRU cache, and authentic EXIF preservation passed.
-- **Stage 7 (Phase 2):** Local Admin session security (Web Crypto SHA-256 salted hash, default passphrase `admin123`), separate Admin and Visitor views, visitor suggestion submissions ("Were You There?"), and Admin review/approval queue passed. Zero Drive uploads from visitors.
-- **Stage 8 (Phase 2):** Real CPU-compatible visual embeddings (`@xenova/transformers` with 224x224 offscreen preview downsampling and vector caching) and multi-signal grouping ("One moment, many cameras") passed. Near-duplicate detection ($\ge 95\%$) verified without deleting originals. Uncertain matches kept strictly provisional.
-- **Stage 9 (Phase 2):** Memory Map updated with provisional vs. confirmed relationship lines and node badges.
+## 🧠 Local AI & Multi-Signal Grouping
+
+- **Model:** Quantized `Xenova/clip-vit-base-patch32` running via ONNX Runtime Web on WASM CPU (int8 ~87 MB).
+- **Fallback:** 64-dimensional normalized spatial perceptual feature extractor.
+- **Bounded Hardware Footprint:** Concurrency bounded to 1 with 30ms event loop yields, accommodating dual-core CPUs with low RAM.
+- **Multi-Signal Rules:**
+  - Close capture times (<45m) + visual match ($\ge 0.65$) = "One moment, many cameras".
+  - Distant capture times (>90m apart) = Strictly separated into distinct moments regardless of visual similarity.
+  - Unknown capture times = Kept strictly provisional with neutral labels.
+  - Near-duplicates ($\ge 95\%$ similarity) = Flagged without deleting originals.
 
 ---
 
-## 🔑 Admin Access & Google Drive Connection
-- **Admin Authentication:** Click the **Visitor / Admin** pill toggle in the header. Enter `admin123` (or custom configured passphrase) to unlock Admin actions.
-- **Drive & AI Settings:** In Admin mode, click **Drive & AI** in the header.
-  - Enter any shared Google Drive folder URL or ID.
-  - Enter optional API Key or OAuth Access Token.
-  - Or click **Connect Sample Drive Folder** for an immediate local simulation of a multi-camera event folder.
-  - Click **Run AI Multi-Signal Grouping** to run the local CPU embedding and multi-camera clustering pipeline.
-- **Visitor Contributions:** Visitors click **Were You There? Have more photos or corrections?** in any moment, enter their name for attribution, and submit suggestions. Submissions are queued for organizer review and never modify Google Drive directly.
-
+## 🐳 Hosting & Deployment Preparation
+- **Dockerfile:** Multi-stage production container build on Node 20 Alpine.
+- **render.yaml:** Blueprint for deploying on Render.com web services.
+- **Environment Template:** See `.env.example` for environment variable options.

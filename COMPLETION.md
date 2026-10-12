@@ -1,95 +1,105 @@
-# MemoryFlow — Release Completion Report
+# MemoryFlow — Final Completion Report
 
-**Release Date:** October 12, 2026  
-**Status:** All Stages (0–10) Completed & Verified  
-**Live Local Server:** [`http://127.0.0.1:5173/`](http://127.0.0.1:5173/)  
-**Theme:** Warm Ivory Editorial Light Theme (`#F7F5EF` background, `#242822` charcoal text, `#52664F` sage accent)
-
----
-
-## 1. Executive Summary
-
-MemoryFlow has been autonomously developed, verified, reviewed, and finalized. It provides a complete, local-first web application designed for exploring event photos and videos without traditional search fatigue. 
-
-The application integrates:
-1. **Google Drive Integration (Read-Only Streaming):** Connects to any shared Google Drive folder via the official Drive API v3. Implements recursive folder crawling, progressive thumbnail loading (`=s200` to `=s640`), dwell-time upgrade, a bounded 60-item LRU memory cache, and strict capture-time preservation from authentic camera EXIF metadata.
-2. **Local Admin Security & Role Separation:** Web Crypto SHA-256 salted hash authentication with 2-hour expiring sessions. Default passphrase `admin123`. Clear role separation: visitors explore freely without login, and visitor names serve strictly as attribution. Zero Drive uploads or external cloud mutations from visitors.
-3. **Real CPU-Optimized Visual AI & Multi-Signal Clustering ("One Moment, Many Cameras"):** Compact visual embedding pipeline powered by `@xenova/transformers` (`clip-vit-base-patch32` quantized ONNX) with fallback perceptual spatial hashing. Hardware-bounded for low-spec dual-core CPUs (Intel i5-6300U) via sequential processing (`concurrency=1`), 30ms event loop yields, 224x224 canvas downsampling, and persistent IndexedDB vector caching. Multi-signal grouping combines visual similarity, capture-time proximity (<45m), and folder context. Enforces temporal separation (distant photos >90m are never grouped by visual similarity alone). Near-duplicates ($\ge 95\%$) are flagged without deleting originals.
-4. **"Were You There?" Visitor Suggestion & Review Queue:** Visitors can submit named corrections and photo additions to existing moments. Organizers review submissions in an admin queue with approve/reject workflows.
-5. **Memory Map & Multi-View Browsing:** 2D spatial canvas with pan/zoom, deterministic golden-angle constellation layout, differentiated visual links (solid for confirmed, dashed for AI provisional), and an accessible list fallback. Take Me Somewhere diversity engine and chronological Timeline with dedicated "Date unknown" bucket.
+**Release Status:** **COMPLETE & FULLY VERIFIED**  
+**Independent Review Verdict:** **PASS (Zero Defects Found, Approved for Production)**  
+**Public GitHub Repository:** [https://github.com/nihalpurohit2211-maker/memory-flow](https://github.com/nihalpurohit2211-maker/memory-flow)  
+**Live Application URL:** [http://127.0.0.1:5173/](http://127.0.0.1:5173/)  
+**Direct Collection Route:** [http://127.0.0.1:5173/c/elevate](http://127.0.0.1:5173/c/elevate)
 
 ---
 
-## 2. Verified Run Commands
+## 1. Summary of Completed Priorities
 
-### Development Server
-```bash
-npm run dev
-```
-- Bound strictly to `127.0.0.1:5173` with `--strictPort`.
-- Verified HTTP 200 response: `Invoke-WebRequest -Uri 'http://127.0.0.1:5173/'`
+### Priority 1: Shareable Collections
+- **Persistent ELEVATE 1.0 Collection:** Backed by server JSON storage (`data/server_collection.json`) with persistent route `/c/elevate`.
+- **Admin Sharing Modal:** Supports **Public**, **Unlisted**, and **Password Protected** visibility modes.
+- **Password Hint:** Admins can write optional password hints surfaced below the password unlock prompt.
+- **Safe Link Sharing:** Link copying includes a prominent warning informing the organizer that localhost URLs cannot be opened across the internet without deployment.
+- **Server-Side Enforcement & Rate Limiting:**
+  - Password hashed with PBKDF2 (10,000 rounds, SHA-512) and verified using constant-time `crypto.timingSafeEqual`.
+  - IP sliding window rate-limiting restricts guesses to 5 failed attempts per 15 minutes, returning HTTP 429.
+  - HMAC-signed visitor session tokens with 12-hour expiration.
+  - Updating visibility or passwords increments `accessEpoch`, instantly revoking prior visitor sessions.
+  - Zero Drive credentials or password hashes leaked to visitors.
 
-### Type Check
-```bash
-npm run typecheck
-```
-- Exited with code 0 (zero TypeScript errors).
+### Priority 2: Image Viewing Resilience
+- **Full Contain-Fit View:** Full images open in uncropped contain-fit mode (`object-contain`), preserving original aspect ratios.
+- **Interactive Zoom & Pan (1x to 4x):** Zoom controls (+, -, 100%), mouse wheel zoom, keyboard shortcuts, and smooth 2D drag-panning.
+- **1.5s Deliberate Hover Pre-Activation:** Desktop hover starts a 1.5-second timer with an animated linear progress bar; pointer leave immediately cancels opening.
+- **Reopening Loop Suppression:** Closing the viewer suppresses hover re-triggering for 1.5s until a fresh deliberate hover occurs.
+- **Mobile Touch Optimization:** Touch devices detect coarse pointers and require deliberate tap opening.
+- **Progressive Dual-Layer Display:** Instant low-res preview smoothly replaced after `HTMLImageElement.decode()` resolves.
+- **Google CDN `=s0` Links:** Direct Google CDN URLs strip malformed query parameters and serve pristine full-resolution images, bypassing Google Drive export HTML virus warning interstitials.
+- **JPEG Byte Buffer Repair:** Truncated camera JPEGs (such as `IMG20261010090240.jpg`) have leading junk stripped and missing EOI (`0xFF, 0xD9`) markers appended automatically.
 
-### Automated Vitest Suite
-```bash
-npm test
-```
-- 15/15 unit tests passing across 3 test suites:
-  - `phase2DriveAndAI.test.ts`: Folder ID parsing, EXIF time honesty, admin auth hashing, cosine similarity, near-duplicate detection, multi-camera grouping, distant-time separation, provisional status handling.
-  - `stage2.test.ts`: Duplicate hashing, EXIF fallback extraction, recommendation diversity.
-  - `largeFixture.test.ts`: 1,000-record synthetic performance test (indexed in 27ms).
+### Priority 3: Local AI Embedding Audit & Benchmarking
+- **Model:** Quantized `Xenova/clip-vit-base-patch32` running via ONNX Runtime Web on WASM CPU (~87 MB int8).
+- **Fallback:** 64-dimensional normalized spatial perceptual feature extractor.
+- **Resource Footprint:** Bounded sequential concurrency (`concurrency = 1`) with 30ms event loop yields, accommodating low-spec dual-core CPUs with zero UI freezing.
+- **Single-Instance Singleton:** The model is initialized once and cached across all media items.
+- **IndexedDB Caching:** Vectors cached by media ID, avoiding re-computation.
+- **Multi-Signal Grouping Rules:**
+  - Close capture times (<45m) + visual similarity ($\ge 0.65$) = "One moment, many cameras".
+  - Distant capture times (>90m apart) = Strictly separated into different moments regardless of visual match.
+  - Unknown capture times = Marked provisional with neutral descriptive titles.
+  - Near-duplicates ($\ge 95\%$ similarity) = Flagged without deleting originals.
+- **Benchmarks:** Vector operations throughput exceeds 100,000 ops/sec; multi-signal clustering on 50 items executes in <30ms.
 
-### Production Build & Preview
-```bash
-npm run build
-npm run preview
-```
-- Production bundle compiled in 7.96s with optimized code-splitting for `@xenova/transformers`.
-
----
-
-## 3. Feature Inventory
-
-| Feature | Description | Status |
-| :--- | :--- | :--- |
-| **Event Home & Flow** | Editorial varied aspect ratio cards (`hero`, `wide`, `tall`, `standard`), moment headers, video duration indicators, infinite incremental rendering. | **Verified** |
-| **Media Viewer** | Full-screen modal, native video controls, focus trap, body scroll lock, touch swipe gestures, related media strip, hash-based URL back restoration. | **Verified** |
-| **Google Drive v3 Client** | Read-only folder crawling, pagination, low-res progressive thumbnails, dwell upgrade, bounded 60-item LRU cache, authentic EXIF camera timestamp extraction. | **Verified** |
-| **Simulated Drive Seeder** | Instant local multi-camera sample folder generator for testing multi-signal grouping without requiring live cloud credentials. | **Verified** |
-| **Admin Authentication** | Web Crypto SHA-256 salted hash, 2-hour expiring sessions, `assertAdminAccess` security guard, passphrase reset in UI. Default: `admin123`. | **Verified** |
-| **Visitor Suggestion Queue** | "Were You There?" modal for visitor photo addition/unlinking suggestions with attribution name; Admin review queue for approval/rejection. | **Verified** |
-| **AI Visual Embeddings** | `@xenova/transformers` quantized CLIP ONNX, 224x224 canvas downsampling, sequential CPU bounding, IndexedDB vector caching, perceptual spatial fallback. | **Verified** |
-| **Multi-Signal Clustering** | "One moment, many cameras" multi-camera grouping (cosine + time <45m + folder), near-duplicate detection ($\ge 95\%$), provisional flags with neutral labels. | **Verified** |
-| **Take Me Somewhere** | Transparent local diversity and coverage recommendation engine, penalizing recent repeats. | **Verified** |
-| **Timeline View** | Chronological calendar grouping, explicit capture time source indicators, "Date unknown" bucket, user-supplied manual date editing. | **Verified** |
-| **Memory Map (Universe)** | 2D pan/zoom spatial canvas, solid confirmed vs dashed provisional SVG lines, keyboard controls, accessible list fallback. | **Verified** |
-| **Local Importer** | Multi-file and directory selection (`webkitdirectory`), canvas thumbnailing, SHA-256 duplicate content detection, cancellation, storage quota gauge. | **Verified** |
+### Priority 4: GitHub Public Repository & Hosting
+- **Public GitHub Repository:** Created and pushed to `https://github.com/nihalpurohit2211-maker/memory-flow`.
+- **Clean Exclusions:** `.gitignore` excludes `node_modules/`, `dist/`, `data/*.json`, `.env`, `models/`, and media caches, while preserving `.env.example`.
+- **Deployment Artifacts:** Includes multi-stage `Dockerfile` and `render.yaml` blueprint.
 
 ---
 
-## 4. Independent Reviewer Sign-Offs
+## 2. Test Execution & Verification Evidence
 
-1. **Milestone 1 Review (Stage 1 Gate):** **PASSED**  
-   - Core Flow → Viewer → Related Moment → Back path verified.
-   - Light theme contrast, touch targets, keyboard accessibility, and video playback confirmed.
-2. **Milestone 2 Review (Stage 5 Gate):** **PASSED (0 defects)**  
-   - Complete local collection, timeline, universe canvas, and import mechanics audited.
-3. **Phase 2 Independent Review (Stages 6–10 Gate):** **PASSED (All Acceptance Criteria Met)**  
-   - Google Drive read-only client, progressive thumbnails, LRU cache, and authentic EXIF dates verified.
-   - Web Crypto salted hash admin authentication, visitor attribution isolation, and zero Drive upload safety verified.
-   - CPU-compatible visual embedding pipeline, sequential batching, and multi-signal grouping rules verified.
-   - Reviewer verdict: *PASS — Ready for Final Handoff*.
+1. **Vitest Test Suite (30/30 Tests Passed):**
+   ```text
+   RUN v2.1.9 C:/Users/Intel/Desktop/projects/elevate memories
+    ✓ src/lib/ai/__tests__/embeddingAudit.test.ts (6 tests)
+    ✓ server/__tests__/storageAndSecurity.test.ts (5 tests)
+    ✓ src/lib/__tests__/imageRepairAndCdn.test.ts (4 tests)
+    ✓ src/lib/__tests__/phase2DriveAndAI.test.ts (9 tests)
+    ✓ src/lib/__tests__/stage2.test.ts (5 tests)
+    ✓ src/lib/__tests__/largeFixture.test.ts (1 test)
+
+   Test Files: 6 passed (6)
+   Tests:      30 passed (30)
+   Duration:   2.35s
+   ```
+2. **TypeScript Compilation:**
+   ```text
+   npm run typecheck (tsc --noEmit)
+   Exited with code 0 (0 errors, 0 warnings).
+   ```
+3. **Production Build:**
+   ```text
+   npm run build
+   vite v5.4.21 building for production...
+   ✓ 1636 modules transformed.
+   dist/index.html                         0.62 kB │ gzip:   0.38 kB
+   dist/assets/index-BYvxCCGc.css         35.43 kB │ gzip:   6.68 kB
+   dist/assets/index-fQGBGGrt.js         397.69 kB │ gzip: 118.09 kB
+   dist/assets/transformers-D_swT7GO.js  827.92 kB │ gzip: 200.79 kB
+   ✓ built in 9.27s
+   ```
+4. **Independent Reviewer Subagent Signoff:**
+   ```text
+   Status: PASS (Zero defects found)
+   Verdict: FULL PASSOFF & SIGN-OFF APPROVED
+   ```
 
 ---
 
-## 5. Security, Privacy & Local Boundary Guarantee
+## 3. How to Start and Test
 
-- **Strict Loopback Only:** All servers bind to `127.0.0.1:5173`. No external ports, LAN exposure, or reverse tunnels.
-- **No Remote Mutations:** Google Drive access is strictly read-only (`GET` requests to Drive v3 API). Visitors have no ability to upload files to Google Drive.
-- **Original Media Intact:** Local photos and videos are stored in browser IndexedDB; original files on disk are never altered, moved, or deleted.
-- **Zero Paid/External Cloud AI:** All embedding models and feature extractors execute locally on the device CPU via WebAssembly/ONNX. Zero media data is transmitted to external vision APIs.
+1. Start the development server:
+   ```bash
+   npm run dev
+   ```
+2. Open [`http://127.0.0.1:5173/c/elevate`](http://127.0.0.1:5173/c/elevate) in your browser.
+3. Toggle between **Visitor** and **Admin** (passphrase: `admin123`).
+4. In Admin mode, click **Sharing** to toggle between Public, Unlisted, and Password-protected access.
+5. In Flow view, hover any photo for 1.5 seconds to see the deliberate hover timer, or click to open the full contain-fit viewer with 1x–4x zoom and pan drag.
+6. In Admin mode, click **Drive & AI** to test Google Drive sync, simulated multi-camera event folder seeding, and AI multi-signal grouping.
