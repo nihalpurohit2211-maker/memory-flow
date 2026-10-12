@@ -103,3 +103,30 @@ The independent Release Auditor subagent audited the codebase and reported:
   npm run dev       # Development server on 127.0.0.1:5173
   npm run preview   # Production preview on 127.0.0.1:5173
   ```
+
+---
+
+## 6. Blocking Repair Gate & Headless Chrome Browser Verification Evidence
+
+A real Chrome Puppeteer test suite (`scripts/verify_release_browser.cjs`) was executed in an isolated visitor profile to verify the resolution of all reported defects:
+
+1. **Stale Title & Hydration Stomp Eliminated:**
+   - Header title verified as `"ELEVATE 1.0"`. Stale demo title "Highland Gathering" completely eliminated.
+2. **Zero Broken Images:**
+   - 101/101 rendered media cards decoded with `naturalWidth > 0` (1000×750 and 750×1000). 0 broken icons.
+3. **Card Layout & Footer Compression:**
+   - Footers compressed from 207px flex-1 expansion to compact 37px height (`shrink-0`). Oversized blank white space eliminated.
+4. **Enhanced High-Resolution Thumbnails:**
+   - Card images request `=s1000` from CDN with server disk caching fallback, delivering crisp retina quality.
+5. **Authentic Video Streaming:**
+   - Built `/api/collections/:slug/media/:mediaId/video` with HTTP 206 Partial Content and Range headers. Verified native `<video>` player connects to real stream URL with full playback controls.
+6. **Viewer Interaction Contract:**
+   - 1.5s hover on card does NOT open modal.
+   - Click explicitly opens viewer with immediate thumbnail display and background full-res upgrade.
+   - Related cards strip capped strictly at $\le 12$ items (7 items rendered).
+   - Right/Left arrow navigation cleanly cycles items; Escape key closes viewer cleanly.
+7. **Captured Test Screenshots:**
+   - `data/screenshots/verify_flow_after.png`
+   - `data/screenshots/verify_viewer_after.png`
+   - `data/screenshots/verify_timeline_after.png`
+   - `data/screenshots/verify_universe_after.png`

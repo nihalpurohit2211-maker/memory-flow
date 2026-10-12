@@ -32,6 +32,7 @@ import {
 import {
   getAllPlacesForCollection,
   getAllContributionsForCollection,
+  getAllMediaForCollection,
 } from './db';
 
 export const apiRouter = Router();
@@ -343,6 +344,155 @@ apiRouter.get('/collections/:slug/download/:mediaId', async (req: Request, res: 
   }
 
   return res.redirect(media.thumbnailUrl);
+});
+
+/**
+ * GET /collections/:slug/media/:mediaId/thumbnail
+ * Reliable media thumbnail proxy with server-side disk caching
+ */
+const THUMBNAILS_CACHE_DIR = path.resolve(process.cwd(), 'data', 'thumbnails');
+if (!fs.existsSync(THUMBNAILS_CACHE_DIR)) {
+  fs.mkdirSync(THUMBNAILS_CACHE_DIR, { recursive: true });
+}
+
+apiRouter.get('/collections/:slug/media/:mediaId/thumbnail', async (req: Request, res: Response) => {
+  const { slug, mediaId } = req.params;
+  const items = getAllMediaForCollection(slug);
+  const media = items.find((m) => m.id === mediaId);
+
+  if (!media) {
+    return res.status(404).send('Media not found');
+  }
+
+  // Check if it is a pending local contribution
+  if (media.thumbnailUrl?.startsWith('/api/uploads/')) {
+    const localName = path.basename(media.thumbnailUrl);
+    const fullPath = path.join(PENDING_UPLOADS_DIR, localName);
+    if (fs.existsSync(fullPath)) {
+      return res.sendFile(fullPath);
+    }
+  }
+
+  // Check cached thumbnail on disk
+  const safeId = media.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const cachedThumbPath = path.join(THUMBNAILS_CACHE_DIR, `${safeId}.jpg`);
+  if (fs.existsSync(cachedThumbPath)) {
+    res.setHeader('Content-Type', media.mimeType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(cachedThumbPath);
+  }
+
+  // Fetch from source URL without browser referrer
+  const targetUrl = media.thumbnailUrl || media.lowResUrl || media.driveFullUrl;
+  if (!targetUrl || targetUrl.startsWith('data:')) {
+    if (targetUrl?.startsWith('data:image/svg+xml')) {
+      const match = targetUrl.match(/data:image\/svg\+xml;charset=utf-8,(.*)$/);
+      if (match) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+        return res.send(decodeURIComponent(match[1]));
+      }
+    }
+    return res.redirect(targetUrl || '');
+  }
+
+  try {
+    const upstreamRes = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MemoryFlow/1.0',
+        'Accept': 'image/*,*/*'
+      }
+    });
+
+    if (upstreamRes.ok) {
+      const arrayBuffer = await upstreamRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      try {
+        fs.writeFileSync(cachedThumbPath, buffer);
+      } catch (writeErr) {
+        console.warn('Failed to cache thumbnail:', writeErr);
+      }
+      res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buffer);
+    }
+  } catch (err) {
+    console.warn(`Upstream fetch failed for thumbnail ${mediaId}:`, err);
+  }
+
+  return res.redirect(targetUrl);
+});
+
+/**
+ * GET /collections/:slug/media/:mediaId/video
+ * Video streaming route supporting Range requests (HTTP 206 Partial Content)
+ */
+apiRouter.get('/collections/:slug/media/:mediaId/video', async (req: Request, res: Response) => {
+  const { slug, mediaId } = req.params;
+  const items = getAllMediaForCollection(slug);
+  const media = items.find((m) => m.id === mediaId);
+
+  if (!media) {
+    return res.status(404).send('Media not found');
+  }
+
+  // Case 1: Local upload or file on disk
+  if (media.thumbnailUrl?.startsWith('/api/uploads/')) {
+    const localName = path.basename(media.thumbnailUrl);
+    const fullPath = path.join(PENDING_UPLOADS_DIR, localName);
+    if (fs.existsSync(fullPath)) {
+      return res.sendFile(fullPath, { acceptRanges: true });
+    }
+  }
+
+  // Case 2: Google Drive video streaming
+  if (media.driveFileId) {
+    const driveStreamUrl = `https://drive.usercontent.google.com/download?id=${media.driveFileId}&export=download`;
+    const rangeHeader = req.headers.range;
+
+    try {
+      const headers: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MemoryFlow/1.0',
+      };
+      if (rangeHeader) {
+        headers['Range'] = rangeHeader;
+      }
+
+      const upstream = await fetch(driveStreamUrl, { headers });
+      res.status(upstream.status);
+
+      const forwardHeaders = ['content-type', 'content-range', 'content-length', 'accept-ranges'];
+      forwardHeaders.forEach((h) => {
+        const val = upstream.headers.get(h);
+        if (val) res.setHeader(h, val);
+      });
+
+      if (!upstream.body) {
+        return res.end();
+      }
+
+      const reader = upstream.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+        res.end();
+      } catch {
+        res.end();
+      }
+      return;
+    } catch (err) {
+      console.warn(`Upstream video stream error for ${mediaId}:`, err);
+      return res.redirect(driveStreamUrl);
+    }
+  }
+
+  if (media.driveFullUrl) {
+    return res.redirect(media.driveFullUrl);
+  }
+
+  return res.status(404).send('Video source not found');
 });
 
 /**

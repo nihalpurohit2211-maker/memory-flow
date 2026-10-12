@@ -158,11 +158,11 @@ export function driveEntryToMediaItem(
   const width = entry.imageMediaMetadata?.width || entry.videoMediaMetadata?.width || null;
   const height = entry.imageMediaMetadata?.height || entry.videoMediaMetadata?.height || null;
 
-  // Progressive thumbnail: =s640 for crisp medium quality
-  const thumbUrl = buildDriveImageUrl(entry.thumbnailLink, 's640');
+  // Progressive thumbnail: =s1000 for crisp high-resolution cards
+  const thumbUrl = buildDriveImageUrl(entry.thumbnailLink, 's1000');
 
-  // Low-res progressive link: =s200 for fast instant placeholder
-  const lowResUrl = buildDriveImageUrl(entry.thumbnailLink, 's200');
+  // Low-res progressive link: =s400 for fast instant placeholder
+  const lowResUrl = buildDriveImageUrl(entry.thumbnailLink, 's400');
 
   // Full uncropped original: =s0 serves the native full resolution without HTML download redirects
   const fullUncroppedUrl = isVideo

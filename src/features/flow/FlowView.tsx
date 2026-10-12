@@ -120,14 +120,12 @@ export const FlowView: React.FC<FlowViewProps> = ({
             )}
 
             {/* Editorial Multi-Aspect Ratio Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
               {momentItems.slice(0, visibleCount).map((item, itemIdx) => {
-                // Editorial layout pattern based on item index
+                // Editorial layout pattern for items without explicit aspect ratio
                 let variant: 'hero' | 'tall' | 'wide' | 'standard' = 'standard';
                 if (itemIdx === 0 && momentItems.length >= 3) {
                   variant = 'wide';
-                } else if (itemIdx % 5 === 2) {
-                  variant = 'tall';
                 }
 
                 return (
@@ -155,7 +153,7 @@ export const FlowView: React.FC<FlowViewProps> = ({
               {momentMediaMap.get('unassigned')!.length} items
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {momentMediaMap.get('unassigned')!.map((item) => (
               <FlowCard
                 key={item.id}

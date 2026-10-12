@@ -15,7 +15,6 @@ import {
   Clock,
   User,
 } from 'lucide-react';
-import { getLocalPlayableVideoBlobUrl } from '../../lib/videoHelper';
 
 interface MediaViewerProps {
   mediaId: string;
@@ -122,14 +121,19 @@ export const MediaViewer: FC<MediaViewerProps> = ({
         setSyntheticVideoUrl(currentMedia.blobUrl);
         setIsLoadingMedia(false);
       } else {
-        getLocalPlayableVideoBlobUrl().then((url) => {
-          if (activeRequestIdRef.current === requestId) {
-            setSyntheticVideoUrl(url);
-            setIsLoadingMedia(false);
-          }
-        });
+        // Stream real video via server endpoint with Range requests support
+        const streamUrl = `/api/collections/${collectionSlug}/media/${encodeURIComponent(currentMedia.id)}/video`;
+        setSyntheticVideoUrl(streamUrl);
+        setIsLoadingMedia(false);
       }
     } else {
+      // Immediate preview display: show thumbnail instantly so user never faces blank screen
+      const initialPreview = currentMedia.thumbnailUrl || currentMedia.lowResUrl || '';
+      if (initialPreview) {
+        setActiveMediaUrl(initialPreview);
+        setIsLoadingMedia(false);
+      }
+
       // Determine target display URL: prefer high-res uncropped original or thumbnail
       const targetUrl =
         currentMedia.blobUrl ||
@@ -144,14 +148,14 @@ export const MediaViewer: FC<MediaViewerProps> = ({
         return;
       }
 
-      // If already cached, show immediately
-      if (preloadedCache.has(targetUrl)) {
+      // If already cached or same as initial preview, no background upgrade needed
+      if (targetUrl === initialPreview || preloadedCache.has(targetUrl)) {
         setActiveMediaUrl(targetUrl);
         setIsLoadingMedia(false);
       } else {
         // Asynchronously decode image and verify it belongs to this requestId
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'no-referrer';
 
         img.onload = async () => {
           if (activeRequestIdRef.current !== requestId) return; // Stale fetch ignored
@@ -177,14 +181,14 @@ export const MediaViewer: FC<MediaViewerProps> = ({
 
         img.onerror = () => {
           if (activeRequestIdRef.current !== requestId) return;
-          // If high-res target failed, fallback cleanly to thumbnail
-          if (targetUrl !== currentMedia.thumbnailUrl && currentMedia.thumbnailUrl) {
-            setActiveMediaUrl(currentMedia.thumbnailUrl);
+          // If high-res target failed, keep preview or fallback to thumbnail proxy
+          if (initialPreview) {
+            setActiveMediaUrl(initialPreview);
             setIsLoadingMedia(false);
           } else {
+            const proxyUrl = `/api/collections/${collectionSlug}/media/${encodeURIComponent(currentMedia.id)}/thumbnail`;
+            setActiveMediaUrl(proxyUrl);
             setIsLoadingMedia(false);
-            setMediaError(true);
-            setErrorMessage('Unable to load image preview.');
           }
         };
 
@@ -200,6 +204,7 @@ export const MediaViewer: FC<MediaViewerProps> = ({
       nearbyUrls.forEach((url) => {
         if (!preloadedCache.has(url)) {
           const preImg = new Image();
+          preImg.referrerPolicy = 'no-referrer';
           preImg.src = url;
         }
       });
@@ -407,6 +412,17 @@ export const MediaViewer: FC<MediaViewerProps> = ({
     });
   }
 
+  // Related media items in the same moment (Capped strictly at at most 12 items)
+  const relatedMedia = primaryMoment
+    ? mediaList
+        .filter(
+          (m) =>
+            m.id !== currentMedia.id &&
+            memberships.some((mem) => mem.mediaId === m.id && mem.momentId === primaryMoment.id)
+        )
+        .slice(0, 12)
+    : [];
+
   // Contributor / Uploader String
   const contributorDisplay =
     currentMedia.contributorVerified && currentMedia.contributorName
@@ -552,6 +568,7 @@ export const MediaViewer: FC<MediaViewerProps> = ({
                 <img
                   src={activeMediaUrl}
                   alt={currentMedia.caption || currentMedia.originalName}
+                  referrerPolicy="no-referrer"
                   className="max-h-[60vh] sm:max-h-[70vh] max-w-full rounded-lg shadow-modal object-contain select-none"
                   draggable={false}
                 />
@@ -674,6 +691,33 @@ export const MediaViewer: FC<MediaViewerProps> = ({
             <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-sans">
               {currentMedia.caption}
             </p>
+          )}
+
+          {/* Related Media in this Moment (Up to 12 items) */}
+          {relatedMedia.length > 0 && (
+            <div className="pt-2 border-t border-white/10">
+              <span className="text-[11px] uppercase tracking-wider text-white/50 block mb-1.5 font-medium">
+                More from this moment ({relatedMedia.length})
+              </span>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {relatedMedia.map((relItem) => (
+                  <button
+                    key={relItem.id}
+                    onClick={() => onNavigateMedia(relItem.id)}
+                    className="relative w-14 h-14 rounded-lg overflow-hidden border border-white/20 hover:border-accent transition-all shrink-0 focus:outline-none focus:ring-1 focus:ring-accent group"
+                    title={relItem.caption || relItem.originalName}
+                  >
+                    <img
+                      src={relItem.thumbnailUrl || relItem.lowResUrl}
+                      alt={relItem.caption || relItem.originalName}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

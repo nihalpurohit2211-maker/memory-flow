@@ -10,13 +10,6 @@ import {
   UserRole,
   DriveConfig,
 } from './types';
-import {
-  initialEvent,
-  initialMoments,
-  initialMedia,
-  initialMemberships,
-  initialConnections,
-} from './data/demoData';
 import { Header } from './components/Header';
 import { FlowView } from './features/flow/FlowView';
 import { MediaViewer } from './features/viewer/MediaViewer';
@@ -33,7 +26,6 @@ import { CollectionPasswordPrompt } from './features/visitor/CollectionPasswordP
 import {
   fetchCollectionInfo,
   fetchCollectionData,
-  syncCollectionToServer,
   getVisitorToken,
   clearVisitorToken,
 } from './lib/collectionApi';
@@ -82,16 +74,23 @@ function parseHash(hash: string): { momentId: string | null; mediaId: string | n
   return { momentId: null, mediaId: null };
 }
 
+const defaultElevateEvent: EventWorkspace = {
+  id: 'elevate-1.0',
+  title: 'ELEVATE 1.0',
+  description: 'Official ELEVATE 1.0 Event Collection',
+  updatedAt: new Date().toISOString(),
+};
+
 export default function App() {
   // State
-  const [event, setEvent] = useState<EventWorkspace>(initialEvent);
-  const [moments, setMoments] = useState<Moment[]>(initialMoments);
-  const [media, setMedia] = useState<MediaItem[]>(initialMedia);
-  const [memberships, setMemberships] = useState<Membership[]>(initialMemberships);
-  const [connections, setConnections] = useState<Connection[]>(initialConnections);
+  const [event, setEvent] = useState<EventWorkspace>(defaultElevateEvent);
+  const [moments, setMoments] = useState<Moment[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [visits, setVisits] = useState<Record<string, Visit>>({});
   const [recentVisitHistory, setRecentVisitHistory] = useState<string[]>([]);
-  const [isRealCollection, setIsRealCollection] = useState<boolean>(false);
+  const [isRealCollection, setIsRealCollection] = useState<boolean>(true);
 
   // Navigation State
   const [viewMode, setViewMode] = useState<ViewMode>('flow');
@@ -119,8 +118,61 @@ export default function App() {
   // Dedicated Flow scroll position preservation
   const flowScrollPosRef = useRef<number>(0);
 
-  // Load collection and Drive/Suggestions status from IndexedDB
+  // Main unified collection loading: prioritize server collection, then fallback to IndexedDB
   const refreshFromDb = useCallback(async () => {
+    // 1. Try server collection first (primary source of truth)
+    try {
+      const info = await fetchCollectionInfo('elevate');
+      setCollectionInfo(info);
+      setEvent({
+        id: info.id || 'elevate-1.0',
+        title: info.name || 'ELEVATE 1.0',
+        description: info.description || 'Official ELEVATE 1.0 Event Collection',
+        updatedAt: info.updatedAt || new Date().toISOString(),
+      });
+
+      if (info.requiresPassword) {
+        const token = getVisitorToken('elevate');
+        if (!token && !isAdminAuthenticated()) {
+          setIsCollectionUnlocked(false);
+          return;
+        }
+      }
+
+      const serverData = await fetchCollectionData('elevate');
+      if (serverData.mediaItems.length > 0 || serverData.moments.length > 0) {
+        setMedia(serverData.mediaItems);
+        setMoments(serverData.moments);
+        setMemberships(serverData.memberships);
+        setConnections(serverData.connections);
+        setIsRealCollection(true);
+
+        // Background cache into IndexedDB for offline resilience
+        saveStoredEvent({
+          id: info.id || 'elevate-1.0',
+          title: info.name || 'ELEVATE 1.0',
+          description: info.description || 'Official ELEVATE 1.0 Event Collection',
+          updatedAt: info.updatedAt || new Date().toISOString(),
+        }).catch(() => {});
+        for (const item of serverData.mediaItems) {
+          saveStoredMediaItem(item).catch(() => {});
+        }
+        for (const mom of serverData.moments) {
+          saveStoredMoment(mom).catch(() => {});
+        }
+        for (const mem of serverData.memberships) {
+          saveStoredMembership(mem).catch(() => {});
+        }
+        for (const conn of serverData.connections) {
+          saveStoredConnection(conn).catch(() => {});
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('Server collection fetch failed, trying IndexedDB:', err);
+    }
+
+    // 2. Fallback to local IndexedDB if server is unavailable
     try {
       const storedMedia = await loadAllStoredMedia();
       const storedMoments = await loadAllStoredMoments();
@@ -128,15 +180,6 @@ export default function App() {
       const storedMemberships = await loadAllStoredMemberships();
       const storedConnections = await loadAllStoredConnections();
       const storedVisits = await loadAllStoredVisits();
-      const storedDriveCfg = await loadDriveConfig();
-      const storedSuggestions = await loadSuggestions();
-
-      if (storedDriveCfg) {
-        setDriveConfig(storedDriveCfg);
-      }
-
-      const pendingCount = storedSuggestions.filter((s) => s.status === 'pending').length;
-      setPendingSuggestionsCount(pendingCount);
 
       if (storedMedia.length > 0 || storedMoments.length > 0) {
         setIsRealCollection(true);
@@ -146,63 +189,22 @@ export default function App() {
         setMemberships(storedMemberships);
         setConnections(storedConnections);
         setVisits(storedVisits);
-
-        // Sync with server-side storage to preserve and share collection
-        syncCollectionToServer('elevate', {
-          moments: storedMoments,
-          mediaItems: storedMedia,
-          memberships: storedMemberships,
-          connections: storedConnections,
-        }).catch(() => {});
-      } else {
-        // Fall back to clean demo dataset
-        setIsRealCollection(false);
-        setEvent(initialEvent);
-        setMedia(initialMedia);
-        setMoments(initialMoments);
-        setMemberships(initialMemberships);
-        setConnections(initialConnections);
-        setVisits({});
       }
     } catch {
-      // IndexedDB fallback
+      // IndexedDB fallback failed
     }
   }, []);
 
-  // Hydrate collection metadata from server on mount
-  useEffect(() => {
-    fetchCollectionInfo('elevate')
-      .then(async (info) => {
-        setCollectionInfo(info);
-        if (info.requiresPassword) {
-          const token = getVisitorToken('elevate');
-          if (!token && !isAdminAuthenticated()) {
-            setIsCollectionUnlocked(false);
-            return;
-          }
-        }
-        // Load shared server collection data if available
-        try {
-          const serverData = await fetchCollectionData('elevate');
-          if (serverData.mediaItems.length > 0 || serverData.moments.length > 0) {
-            setMedia(serverData.mediaItems);
-            setMoments(serverData.moments);
-            setMemberships(serverData.memberships);
-            setConnections(serverData.connections);
-            setIsRealCollection(true);
-          }
-        } catch {
-          // Fall back to IndexedDB
-        }
-      })
-      .catch((err) => {
-        console.warn('Server collection metadata not yet initialized:', err);
-      });
-  }, []);
-
-  // Hydrate from DB on mount
+  // Hydrate collection on mount and load secondary metadata
   useEffect(() => {
     refreshFromDb();
+    loadDriveConfig().then((cfg) => {
+      if (cfg) setDriveConfig(cfg);
+    }).catch(() => {});
+    loadSuggestions().then((sugs) => {
+      const pendingCount = sugs.filter((s) => s.status === 'pending').length;
+      setPendingSuggestionsCount(pendingCount);
+    }).catch(() => {});
   }, [refreshFromDb]);
 
   // Initial URL hash hydration
@@ -528,7 +530,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="font-medium text-charcoal">
-              {isRealCollection ? 'Local IndexedDB Collection' : 'Sample Demo Fixture'}
+              {isRealCollection ? 'ELEVATE 1.0 Collection' : 'Sample Demo Fixture'}
             </span>
             <span>•</span>
             <span>{media.length} photos/videos across {moments.length} moments</span>

@@ -59,6 +59,13 @@
   - `STATUS.md`, `read.md`, and `plan.md` updated and synchronized.
   - `RELEASE.md` published.
   - Public repository on GitHub at `https://github.com/nihalpurohit2211-maker/memory-flow`.
+- [x] **Blocking Repair Gate & Media Restoration (100% Verified in Headless Chrome):**
+  - **Referrer-Policy Fix:** `<meta name="referrer" content="no-referrer" />` and `referrerPolicy="no-referrer"` eliminate Google Drive CDN HTTP 429 HTML responses, restoring authentic JPEG streams across all views.
+  - **Eliminated Stale "Highland Gathering" Title:** `App.tsx` default event set to `ELEVATE 1.0`, unified server-first hydration eliminates demo data stomp in fresh visitor sessions.
+  - **Eliminated Blank White Card Void:** FlowCard footer compressed from 207px flex-1 expansion to compact 37px `shrink-0`, and `items-start` applied to grid containers.
+  - **Upgraded Thumbnail Resolution:** Upgraded from `s200` to crisp `s1000` (1000×750 and 750×1000) for high-DPI displays.
+  - **Restored Authentic Video Streaming:** Express `/api/collections/:slug/media/:mediaId/video` streaming route with HTTP 206 Partial Content / Range support powers native `<video>` playback for Google Drive and local videos.
+  - **Headless Chrome Puppeteer Verification:** Real browser test (`scripts/verify_release_browser.cjs`) passed 100% with 0 broken images, `naturalWidth > 0`, 37px footers, hover contract verified, immediate viewer open, and 4 evidence screenshots captured.
 
 ---
 
