@@ -1,0 +1,7 @@
+node_modules
+dist
+data/server_collection.json
+.env
+.git
+.vscode
+*.log

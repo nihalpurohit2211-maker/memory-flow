@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+
+# Server runtime data & persistent collections (do not commit runtime state or secrets)
+data/server_collection.json
+data/*.json
+
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+*.env
+*.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Models and AI cache
+models/
+onnx/
+.cache/
+transformers_cache/
+
+# Local media and testing fixtures
+media/
+imports/
+test-media/
+local_media/
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
