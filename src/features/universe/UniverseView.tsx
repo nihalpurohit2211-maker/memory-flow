@@ -76,13 +76,27 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
     return map;
   }, [moments, media, memberships]);
 
-  // Deterministic 2D layout based on golden angle spiral
+  // Sort moments chronologically based on their earliest media capture time
+  const sortedMoments = useMemo(() => {
+    return [...moments].sort((a, b) => {
+      const dataA = momentDataMap.get(a.id);
+      const dataB = momentDataMap.get(b.id);
+      const timeA = dataA?.items.find((i) => i.captureTime)?.captureTime || '';
+      const timeB = dataB?.items.find((i) => i.captureTime)?.captureTime || '';
+      if (timeA && timeB) return new Date(timeA).getTime() - new Date(timeB).getTime();
+      if (timeA) return -1;
+      if (timeB) return 1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [moments, momentDataMap]);
+
+  // Deterministic 2D layout based on golden angle spiral ordered by chronological sequence
   const nodePositions = useMemo<Map<string, NodePosition>>(() => {
     const posMap = new Map<string, NodePosition>();
     const centerX = 800;
     const centerY = 550;
 
-    moments.forEach((moment, idx) => {
+    sortedMoments.forEach((moment, idx) => {
       if (idx === 0) {
         posMap.set(moment.id, { momentId: moment.id, x: centerX, y: centerY });
       } else {
@@ -95,7 +109,7 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
     });
 
     return posMap;
-  }, [moments]);
+  }, [sortedMoments]);
 
   // Fit to view
   const handleFitToView = useCallback(() => {
@@ -115,6 +129,23 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
   useEffect(() => {
     handleFitToView();
   }, [handleFitToView]);
+
+  // Non-passive native wheel listener to prevent browser scroll and enable smooth zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      setScale((s) => Math.max(0.4, Math.min(2.0, Number((s + delta).toFixed(2)))));
+    };
+
+    container.addEventListener('wheel', onNativeWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onNativeWheel);
+    };
+  }, []);
 
   // Zoom helpers
   const handleZoomIn = () => setScale((s) => Math.min(2.0, Number((s + 0.2).toFixed(2))));
@@ -138,7 +169,10 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
 
   const handleMouseUp = () => setIsPanning(false);
 
-  // Touch pan handlers for mobile viewports
+  // Touch pan & pinch-zoom handlers for mobile viewports
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartScaleRef = useRef<number>(1.0);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1 && !(e.target as HTMLElement).closest('button')) {
       setIsPanning(true);
@@ -146,24 +180,35 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
         x: e.touches[0].clientX - pan.x,
         y: e.touches[0].clientY - pan.y,
       };
+      touchStartDistRef.current = null;
+    } else if (e.touches.length === 2) {
+      setIsPanning(false);
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDistRef.current = Math.hypot(dx, dy);
+      touchStartScaleRef.current = scale;
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isPanning || e.touches.length !== 1) return;
-    setPan({
-      x: e.touches[0].clientX - startPanRef.current.x,
-      y: e.touches[0].clientY - startPanRef.current.y,
-    });
+    if (e.touches.length === 1 && isPanning) {
+      setPan({
+        x: e.touches[0].clientX - startPanRef.current.x,
+        y: e.touches[0].clientY - startPanRef.current.y,
+      });
+    } else if (e.touches.length === 2 && touchStartDistRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const currentDist = Math.hypot(dx, dy);
+      const factor = currentDist / touchStartDistRef.current;
+      const nextScale = Math.max(0.4, Math.min(2.0, Number((touchStartScaleRef.current * factor).toFixed(2))));
+      setScale(nextScale);
+    }
   };
 
-  const handleTouchEnd = () => setIsPanning(false);
-
-  // Wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    setScale((s) => Math.max(0.4, Math.min(2.0, Number((s + delta).toFixed(2)))));
+  const handleTouchEnd = () => {
+    setIsPanning(false);
+    touchStartDistRef.current = null;
   };
 
   // Keyboard navigation for canvas pan
@@ -271,7 +316,6 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          onWheel={handleWheel}
           aria-label="Memory Universe spatial canvas. Use arrow keys to pan, zoom controls to inspect."
           className={`relative w-full h-[620px] sm:h-[720px] bg-[#FAF8F2] border border-border rounded-xl overflow-hidden shadow-subtle cursor-grab active:cursor-grabbing select-none focus:outline-none focus:ring-2 focus:ring-accent`}
         >
@@ -330,13 +374,16 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
             }}
           >
-            {moments.map((moment) => {
+            {sortedMoments.map((moment) => {
               const pos = nodePositions.get(moment.id);
               if (!pos) return null;
 
               const data = momentDataMap.get(moment.id);
               const count = data?.count || 0;
               const cover = data?.cover;
+              const coverThumb = cover
+                ? `/api/collections/elevate/media/${cover.id}/thumbnail`
+                : null;
 
               // Wide zoom vs Close zoom level of detail
               const isWideZoom = scale < 0.65;
@@ -378,8 +425,15 @@ export const UniverseView: React.FC<UniverseViewProps> = ({
                         <div className="relative h-28 bg-surface-muted overflow-hidden">
                           {cover ? (
                             <img
-                              src={cover.thumbnailUrl}
+                              src={coverThumb || cover.thumbnailUrl}
                               alt={moment.label}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                // Fallback to direct thumbnail URL if proxy fails
+                                if (e.currentTarget.src !== cover.thumbnailUrl) {
+                                  e.currentTarget.src = cover.thumbnailUrl;
+                                }
+                              }}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                           ) : (

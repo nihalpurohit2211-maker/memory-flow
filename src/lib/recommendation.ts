@@ -39,8 +39,14 @@ export function pickTakeMeSomewhere(
     const recencyIndex = recentVisitHistory.lastIndexOf(moment.id);
     const recencyPenalty = recencyIndex !== -1 ? (recencyIndex + 1) / recentVisitHistory.length * 0.4 : 0;
 
-    // Small random exploration factor (0 to 0.15)
-    const explorationJitter = Math.random() * 0.15;
+    // Deterministic exploration factor based on moment ID and day bucket (0 to 0.15)
+    let hash = 0;
+    for (let i = 0; i < moment.id.length; i++) {
+      hash = ((hash << 5) - hash + moment.id.charCodeAt(i)) | 0;
+    }
+    const dayBucket = Math.floor(Date.now() / 86400000);
+    const combined = Math.abs(hash ^ dayBucket);
+    const explorationJitter = (combined % 150) / 1000;
 
     const totalScore = coverageScore - recencyPenalty + explorationJitter;
 

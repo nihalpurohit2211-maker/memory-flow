@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   EventWorkspace,
   MediaItem,
@@ -22,6 +22,10 @@ import { DriveConfigModal } from './features/admin/DriveConfigModal';
 import { AdminReviewQueue } from './features/admin/AdminReviewQueue';
 import { VisitorSuggestionModal } from './features/visitor/VisitorSuggestionModal';
 import { AdminSharingModal } from './features/admin/AdminSharingModal';
+import { AdminPeoplePanel } from './features/admin/AdminPeoplePanel';
+import { AdminEmbeddingsImport } from './features/admin/AdminEmbeddingsImport';
+import { AdminCollectionsPanel } from './features/admin/AdminCollectionsPanel';
+import { BackToTop } from './components/BackToTop';
 import { CollectionPasswordPrompt } from './features/visitor/CollectionPasswordPrompt';
 import {
   fetchCollectionInfo,
@@ -29,9 +33,9 @@ import {
   getVisitorToken,
   clearVisitorToken,
 } from './lib/collectionApi';
-import { SharedCollectionInfo } from './types';
+import { SharedCollectionInfo, PersonGroup } from './types';
 import { pickTakeMeSomewhere, RecommendationResult } from './lib/recommendation';
-import { getActiveRole, setActiveRole, isAdminAuthenticated, logoutAdmin } from './lib/auth';
+import { getActiveRole, setActiveRole, isAdminAuthenticated, logoutAdmin, getAdminSession } from './lib/auth';
 import {
   loadStoredEvent,
   saveStoredEvent,
@@ -115,6 +119,13 @@ export default function App() {
   const [collectionInfo, setCollectionInfo] = useState<SharedCollectionInfo | null>(null);
   const [isCollectionUnlocked, setIsCollectionUnlocked] = useState<boolean>(true);
 
+  // Search & Feature Panels State
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
+  const [isCollectionsPanelOpen, setIsCollectionsPanelOpen] = useState(false);
+  const [peopleGroups, setPeopleGroups] = useState<PersonGroup[]>([]);
+
   // Dedicated Flow scroll position preservation
   const flowScrollPosRef = useRef<number>(0);
 
@@ -146,6 +157,17 @@ export default function App() {
         setMemberships(serverData.memberships);
         setConnections(serverData.connections);
         setIsRealCollection(true);
+
+        // Fetch people groups
+        try {
+          const pRes = await fetch('/api/collections/elevate/people-groups');
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            setPeopleGroups(pData.groups || []);
+          }
+        } catch {
+          // Ignore if people groups not yet created
+        }
 
         // Background cache into IndexedDB for offline resilience
         saveStoredEvent({
@@ -475,6 +497,76 @@ export default function App() {
     }
   };
 
+  const handleUpdatePersonGroupName = async (groupId: string, newLabel: string) => {
+    const session = getAdminSession();
+    try {
+      const res = await fetch(`/api/collections/${collectionInfo?.slug || 'elevate'}/admin/people-groups/${groupId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ label: newLabel }),
+      });
+      if (res.ok) {
+        setPeopleGroups((prev) =>
+          prev.map((g) => (g.id === groupId ? { ...g, label: newLabel, isConfirmed: true } : g))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update person group label:', err);
+    }
+  };
+
+  // Keyboard shortcuts: Alt+1 (Flow), Alt+2 (Timeline), Alt+3 (Universe), Alt+S (Take Me Somewhere)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+      if (e.altKey) {
+        if (e.key === '1') {
+          e.preventDefault();
+          setActiveMomentId(null);
+          setActiveMediaId(null);
+          setViewMode('flow');
+        } else if (e.key === '2') {
+          e.preventDefault();
+          setActiveMomentId(null);
+          setActiveMediaId(null);
+          setViewMode('timeline');
+        } else if (e.key === '3') {
+          e.preventDefault();
+          setActiveMomentId(null);
+          setActiveMediaId(null);
+          setViewMode('universe');
+        } else if (e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          handleTakeMeSomewhere();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleTakeMeSomewhere]);
+
+  // Search filter across media captions, filenames, contributors, places, and activities
+  const displayedMedia = useMemo(() => {
+    if (!searchQuery.trim()) return media;
+    const q = searchQuery.toLowerCase().trim();
+    return media.filter((m) => {
+      const matchCaption = m.caption?.toLowerCase().includes(q);
+      const matchName = m.originalName.toLowerCase().includes(q);
+      const matchContributor = m.contributorName?.toLowerCase().includes(q);
+      const matchPlace = m.places?.some((p) => p.toLowerCase().includes(q));
+      const matchActivity = m.activities?.some((a) => a.toLowerCase().includes(q));
+      return matchCaption || matchName || matchContributor || matchPlace || matchActivity;
+    });
+  }, [media, searchQuery]);
+
   const activeMoment = moments.find((m) => m.id === activeMomentId);
 
   // If collection is password protected and visitor has not unlocked it
@@ -523,7 +615,30 @@ export default function App() {
         collectionVisibility={collectionInfo?.visibility}
         pendingSuggestionsCount={pendingSuggestionsCount}
         isDriveConnected={!!driveConfig && driveConfig.status === 'ready'}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onClearSearch={() => setSearchQuery('')}
+        onOpenPeoplePanel={() => setIsPeoplePanelOpen(true)}
+        onOpenAiImport={() => setIsAiImportOpen(true)}
+        onOpenCollectionsPanel={() => setIsCollectionsPanelOpen(true)}
       />
+
+      {/* Active Search Results Banner */}
+      {searchQuery && (
+        <div className="bg-surface-muted border-b border-border px-4 sm:px-6 py-2 text-xs text-charcoal">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <span>
+              Found <strong>{displayedMedia.length}</strong> memories matching “<strong>{searchQuery}</strong>”
+            </span>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-accent hover:underline font-medium text-xs"
+            >
+              Clear search
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Collection management sub-bar */}
       <div className="bg-surface-muted/60 border-b border-border/80 px-4 sm:px-6 py-1.5 text-xs text-charcoal-muted flex flex-wrap items-center justify-between gap-2">
@@ -616,7 +731,7 @@ export default function App() {
         ) : viewMode === 'flow' ? (
           <FlowView
             moments={moments}
-            media={media}
+            media={displayedMedia}
             memberships={memberships}
             onOpenMedia={handleOpenMedia}
             onSelectMoment={handleSelectMoment}
@@ -627,7 +742,7 @@ export default function App() {
           />
         ) : viewMode === 'timeline' ? (
           <TimelineView
-            media={media}
+            media={displayedMedia}
             moments={moments}
             memberships={memberships}
             onOpenMedia={handleOpenMedia}
@@ -737,6 +852,44 @@ export default function App() {
           }
         }}
       />
+
+      {/* Admin People & Face Groups Panel */}
+      {isPeoplePanelOpen && (
+        <AdminPeoplePanel
+          collectionSlug={collectionInfo?.slug || 'elevate'}
+          adminSessionToken={getAdminSession().token || ''}
+          peopleGroups={peopleGroups}
+          media={media}
+          onClose={() => setIsPeoplePanelOpen(false)}
+          onUpdateGroupName={handleUpdatePersonGroupName}
+          onOpenMedia={handleOpenMedia}
+        />
+      )}
+
+      {/* Admin Colab AI Data Importer */}
+      {isAiImportOpen && (
+        <AdminEmbeddingsImport
+          collectionSlug={collectionInfo?.slug || 'elevate'}
+          adminSessionToken={getAdminSession().token || ''}
+          onClose={() => setIsAiImportOpen(false)}
+          onImportComplete={refreshFromDb}
+        />
+      )}
+
+      {/* Admin Multi-Collection Management Panel */}
+      {isCollectionsPanelOpen && (
+        <AdminCollectionsPanel
+          currentSlug={collectionInfo?.slug || 'elevate'}
+          adminSessionToken={getAdminSession().token || ''}
+          onClose={() => setIsCollectionsPanelOpen(false)}
+          onSelectCollection={(slug) => {
+            window.location.pathname = `/c/${slug}`;
+          }}
+        />
+      )}
+
+      {/* Back To Top Floating Action Button */}
+      <BackToTop />
     </div>
   );
 }

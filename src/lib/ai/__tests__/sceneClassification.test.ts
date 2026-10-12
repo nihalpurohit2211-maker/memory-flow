@@ -87,7 +87,7 @@ describe('Scene Classification, Activity Tags & Place Grouping', () => {
     embeddings.set('item_morning_stage', stageVenueVector);
     embeddings.set('item_evening_stage', stageVenueVector);
 
-    const { places, mediaPlaceAssignments } = clusterPlacesAcrossPhotos(
+    const { places, mediaPlaceAssignments, mediaPlaceNames } = clusterPlacesAcrossPhotos(
       'elevate',
       [morningStagePhoto, eveningStagePhoto],
       embeddings
@@ -98,7 +98,7 @@ describe('Scene Classification, Activity Tags & Place Grouping', () => {
     expect(places.length).toBe(1);
     expect(mediaPlaceAssignments.get('item_morning_stage')).toBe(places[0].id);
     expect(mediaPlaceAssignments.get('item_evening_stage')).toBe(places[0].id);
-    expect(morningStagePhoto.places).toContain(places[0].name);
-    expect(eveningStagePhoto.places).toContain(places[0].name);
+    expect(mediaPlaceNames.get('item_morning_stage')).toContain(places[0].name);
+    expect(mediaPlaceNames.get('item_evening_stage')).toContain(places[0].name);
   });
 });

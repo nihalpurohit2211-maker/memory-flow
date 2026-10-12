@@ -44,6 +44,7 @@ export const MomentDetail: FC<MomentDetailProps> = ({
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [selectedTargetMoment, setSelectedTargetMoment] = useState('');
   const [connectEvidence, setConnectEvidence] = useState('');
+  const [displayCount, setDisplayCount] = useState(24);
 
   // Media belonging to this moment
   const momentMedia = media.filter((m) =>
@@ -278,26 +279,45 @@ export const MomentDetail: FC<MomentDetailProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {momentMedia.map((item) => (
-              <div key={item.id} className="relative group">
-                <FlowCard media={item} onOpen={onOpenMedia} layoutVariant="standard" />
-                {/* Organization action: Wrong group? */}
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {momentMedia.slice(0, displayCount).map((item) => (
+                <div key={item.id} className="relative group">
+                  <FlowCard media={item} onOpen={onOpenMedia} layoutVariant="standard" />
+                  {/* Organization action: Wrong group? */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveMembership(item.id, moment.id);
+                    }}
+                    title="Remove from this moment (Wrong group?)"
+                    aria-label={`Remove ${item.originalName} from this moment`}
+                    className="absolute top-2 left-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 bg-surface/95 text-charcoal-muted hover:text-red-600 rounded-md border border-border shadow-subtle transition-opacity text-[11px] flex items-center gap-1 z-10"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Wrong group?</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {momentMedia.length > displayCount && (
+              <div className="flex items-center justify-center gap-3 pt-4">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveMembership(item.id, moment.id);
-                  }}
-                  title="Remove from this moment (Wrong group?)"
-                  aria-label={`Remove ${item.originalName} from this moment`}
-                  className="absolute top-2 left-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 bg-surface/95 text-charcoal-muted hover:text-red-600 rounded-md border border-border shadow-subtle transition-opacity text-[11px] flex items-center gap-1 z-10"
+                  onClick={() => setDisplayCount((prev) => prev + 24)}
+                  className="px-4 py-2 bg-surface hover:bg-surface-muted border border-border text-charcoal text-xs font-medium rounded-lg shadow-subtle transition-colors min-h-[40px]"
                 >
-                  <Unlink className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Wrong group?</span>
+                  Show 24 more ({momentMedia.length - displayCount} remaining)
+                </button>
+                <button
+                  onClick={() => setDisplayCount(momentMedia.length)}
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover text-surface text-xs font-medium rounded-lg shadow-subtle transition-colors min-h-[40px]"
+                >
+                  Show all ({momentMedia.length})
                 </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </section>
 

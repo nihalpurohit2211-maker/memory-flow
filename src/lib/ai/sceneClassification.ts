@@ -65,14 +65,21 @@ export interface ActivityClassificationResult {
 export function classifyMediaActivities(
   mediaId: string,
   embedding: number[],
-  modelInfo: string = 'Xenova/clip-vit-base-patch32'
+  modelInfo: string = 'Xenova/clip-vit-base-patch32',
+  customPrototypes?: Record<string, number[]>
 ): ActivityTag[] {
   if (!embedding || embedding.length === 0) return [];
 
   const normEmbedding = normalizeVector(embedding);
-  const targetVec = normEmbedding.length === 64
+  const activePrototypes = customPrototypes || ACTIVITY_PROTOTYPES;
+
+  // Determine dimension to match prototype dimension
+  const firstProto = Object.values(activePrototypes)[0];
+  const targetDim = firstProto ? firstProto.length : 64;
+
+  const targetVec = normEmbedding.length === targetDim
     ? normEmbedding
-    : normalizeVector(normEmbedding.slice(0, 64));
+    : normalizeVector(normEmbedding.slice(0, targetDim));
 
   // Compute variance to reject flat uniform images, solid colors, and uninformative noise
   const targetMean = targetVec.reduce((sum, v) => sum + v, 0) / targetVec.length;
@@ -84,8 +91,9 @@ export function classifyMediaActivities(
   const targetZeroMean = normalizeVector(targetVec.map((v) => v - targetMean));
   const matchedTags: ActivityTag[] = [];
 
-  for (const [activityName, prototype] of Object.entries(ACTIVITY_PROTOTYPES)) {
-    const score = computeCosineSimilarity(targetZeroMean, prototype);
+  for (const [activityName, prototype] of Object.entries(activePrototypes)) {
+    const protoNormalized = normalizeVector(prototype);
+    const score = computeCosineSimilarity(targetZeroMean, protoNormalized);
 
     if (score >= CALIBRATED_CONFIDENCE_THRESHOLD) {
       matchedTags.push({
@@ -119,12 +127,20 @@ export function clusterPlacesAcrossPhotos(
 ): {
   places: Place[];
   mediaPlaceAssignments: Map<string, string>; // mediaId -> placeId
+  mediaPlaceNames: Map<string, string[]>; // mediaId -> place names (non-mutating)
 } {
   const places: Place[] = [...existingPlaces];
   const mediaPlaceAssignments = new Map<string, string>();
+  const mediaPlaceNames = new Map<string, string[]>();
+
+  // Initialize mediaPlaceNames with existing places without mutating input objects
+  mediaItems.forEach((item) => {
+    mediaPlaceNames.set(item.id, item.places ? [...item.places] : []);
+  });
+
   const unassignedItems = mediaItems.filter((item) => {
-    // Check if already in an existing place
-    const hasExisting = places.some((p) => item.places?.includes(p.name));
+    const currentPlaces = mediaPlaceNames.get(item.id) || [];
+    const hasExisting = places.some((p) => currentPlaces.includes(p.name));
     return !hasExisting;
   });
 
@@ -151,7 +167,6 @@ export function clusterPlacesAcrossPhotos(
       const similarity = computeCosineSimilarity(vecA, vecB);
 
       // Same place similarity threshold (independent of capture timestamp!)
-      // Folder context can also indicate shared location
       const sameFolder = !!(
         itemA.driveParentFolderId &&
         itemB.driveParentFolderId &&
@@ -173,7 +188,6 @@ export function clusterPlacesAcrossPhotos(
 
   // Create suggested place groups
   clusters.forEach((cluster, idx) => {
-    // Determine initial neutral place name
     let placeName = '';
     if (cluster[0].driveParentFolderId) {
       placeName = `${cluster[0].driveParentFolderId} Area`;
@@ -195,12 +209,12 @@ export function clusterPlacesAcrossPhotos(
 
     cluster.forEach((item) => {
       mediaPlaceAssignments.set(item.id, placeId);
-      if (!item.places) item.places = [];
-      if (!item.places.includes(placeName)) {
-        item.places.push(placeName);
+      const list = mediaPlaceNames.get(item.id) || [];
+      if (!list.includes(placeName)) {
+        mediaPlaceNames.set(item.id, [...list, placeName]);
       }
     });
   });
 
-  return { places, mediaPlaceAssignments };
+  return { places, mediaPlaceAssignments, mediaPlaceNames };
 }

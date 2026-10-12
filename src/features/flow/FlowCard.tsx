@@ -51,6 +51,7 @@ export const FlowCard: React.FC<FlowCardProps> = ({
   const [isUpgraded, setIsUpgraded] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<boolean>(false);
   const [triedFallback, setTriedFallback] = useState<boolean>(false);
+  const [isHovering, setIsHovering] = useState<boolean>(false);
 
   // Reset image if media changes
   useEffect(() => {
@@ -59,6 +60,7 @@ export const FlowCard: React.FC<FlowCardProps> = ({
     setIsUpgraded(false);
     setLoadError(false);
     setTriedFallback(false);
+    setIsHovering(false);
   }, [media.id, media.thumbnailUrl, media.lowResUrl]);
 
   // Clean up dwell timer on unmount
@@ -75,6 +77,7 @@ export const FlowCard: React.FC<FlowCardProps> = ({
     if (isUpgraded || loadError) return;
     if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
 
+    setIsHovering(true);
     dwellTimerRef.current = setTimeout(() => {
       const upgradeUrl = media.thumbnailUrl || media.driveFullUrl;
       if (upgradeUrl && upgradeUrl !== currentSrc) {
@@ -83,13 +86,17 @@ export const FlowCard: React.FC<FlowCardProps> = ({
         img.onload = () => {
           setCurrentSrc(upgradeUrl);
           setIsUpgraded(true);
+          setIsHovering(false);
         };
         img.src = upgradeUrl;
+      } else {
+        setIsHovering(false);
       }
     }, 1000);
   };
 
   const handlePointerLeave = () => {
+    setIsHovering(false);
     if (dwellTimerRef.current) {
       clearTimeout(dwellTimerRef.current);
       dwellTimerRef.current = null;
@@ -198,6 +205,13 @@ export const FlowCard: React.FC<FlowCardProps> = ({
         <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded bg-surface/90 backdrop-blur-sm text-text text-[11px] font-medium border border-theme-border/80">
           <span>{formatTimestamp(media.captureTime, media.captureTimeSource)}</span>
         </div>
+
+        {/* Hover upgrade progress indicator */}
+        {isHovering && !isUpgraded && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent/20 overflow-hidden z-10 pointer-events-none">
+            <div className="h-full bg-accent transition-all duration-1000 ease-out w-full" />
+          </div>
+        )}
       </div>
 
       {/* Caption & Metadata Footer (compact, no blank white spacing) */}

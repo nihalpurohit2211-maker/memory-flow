@@ -142,6 +142,23 @@ export function setupAdminPassphrase(passphrase: string): { success: boolean } {
   return { success: true };
 }
 
+export function changeAdminPassphrase(newPassphrase: string): { success: boolean } {
+  const db = getDb();
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashCollectionPassword(newPassphrase, salt);
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT OR REPLACE INTO admin_auth (id, password_hash, password_salt, iterations, created_at, updated_at)
+    VALUES ('root', ?, ?, 100000, ?, ?)
+  `).run(hash, salt, now, now);
+
+  // Invalidate all existing admin sessions on password change
+  db.prepare('DELETE FROM admin_sessions').run();
+
+  return { success: true };
+}
+
 export function verifyAdminPassphrase(passphrase: string): boolean {
   const db = getDb();
   const row = db.prepare('SELECT * FROM admin_auth WHERE id = ?').get('root') as any;

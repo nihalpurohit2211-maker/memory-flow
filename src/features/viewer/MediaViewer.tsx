@@ -66,6 +66,12 @@ export const MediaViewer: FC<MediaViewerProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, initialPanX: 0, initialPanY: 0 });
 
+  // Caption suggestion state
+  const [showCaptionInput, setShowCaptionInput] = useState(false);
+  const [captionText, setCaptionText] = useState('');
+  const [captionStatus, setCaptionStatus] = useState<string | null>(null);
+  const [isSubmittingCaption, setIsSubmittingCaption] = useState(false);
+
   // Touch swipe tracking
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -686,12 +692,88 @@ export const MediaViewer: FC<MediaViewerProps> = ({
             </div>
           )}
 
-          {/* Caption */}
-          {currentMedia.caption && (
-            <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-sans">
-              {currentMedia.caption}
-            </p>
-          )}
+          {/* Caption & Suggestions */}
+          <div className="space-y-1.5">
+            {currentMedia.caption ? (
+              <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-sans">
+                {currentMedia.caption}
+              </p>
+            ) : (
+              <p className="text-xs text-white/40 italic">No caption provided yet.</p>
+            )}
+
+            {showCaptionInput ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!captionText.trim() || !currentMedia) return;
+                  setIsSubmittingCaption(true);
+                  try {
+                    const res = await fetch(`/api/collections/elevate/media/${currentMedia.id}/suggest-caption`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ caption: captionText.trim(), visitorName: 'Visitor' }),
+                    });
+                    if (res.ok) {
+                      setCaptionStatus('✓ Caption suggested for organizer review!');
+                      setCaptionText('');
+                      setTimeout(() => {
+                        setShowCaptionInput(false);
+                        setCaptionStatus(null);
+                      }, 2500);
+                    }
+                  } catch {
+                    setCaptionStatus('Failed to submit caption.');
+                  } finally {
+                    setIsSubmittingCaption(false);
+                  }
+                }}
+                className="space-y-2 pt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={captionText}
+                    onChange={(e) => setCaptionText(e.target.value)}
+                    placeholder="Write a descriptive caption or note..."
+                    autoFocus
+                    className="flex-1 px-3 py-1.5 text-xs bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmittingCaption || !captionText.trim()}
+                    className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs font-medium rounded-lg"
+                  >
+                    {isSubmittingCaption ? 'Submitting...' : 'Submit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCaptionInput(false);
+                      setCaptionStatus(null);
+                    }}
+                    className="px-2.5 py-1.5 text-white/60 hover:text-white text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {captionStatus && (
+                  <p className="text-[11px] text-accent-light font-medium">{captionStatus}</p>
+                )}
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCaptionInput(true);
+                  setCaptionText(currentMedia.caption || '');
+                }}
+                className="text-[11px] text-white/50 hover:text-white/90 underline inline-block"
+              >
+                {currentMedia.caption ? 'Suggest caption edit' : '+ Add caption note'}
+              </button>
+            )}
+          </div>
 
           {/* Related Media in this Moment (Up to 12 items) */}
           {relatedMedia.length > 0 && (

@@ -79,6 +79,8 @@ export interface PersonGroup {
   isConfirmed: boolean;
   consented: boolean;
   mediaIds: string[];
+  coverMediaId?: string | null;
+  mediaCount?: number;
 }
 
 export interface MediaChip {
@@ -227,5 +229,8 @@ export interface SharedCollectionInfo {
   requiresPassword: boolean;
   peopleGroupingEnabled: boolean;
   updatedAt: string;
+  mediaCount?: number;
+  momentCount?: number;
+  hasPassword?: boolean;
 }
 

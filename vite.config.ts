@@ -26,13 +26,12 @@ function expressApiPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), expressApiPlugin()],
   server: {
-    host: '127.0.0.1',
-    port: 5173,
+    host: process.env.HOST || '127.0.0.1',
+    port: parseInt(process.env.PORT || '5173'),
     strictPort: true,
   },
   preview: {
-    host: '127.0.0.1',
-    port: 5173,
-    strictPort: true,
+    host: process.env.HOST || '0.0.0.0',
+    port: parseInt(process.env.PORT || '5173'),
   },
 });

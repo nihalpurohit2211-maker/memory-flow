@@ -24,6 +24,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 }) => {
   const [editingMediaId, setEditingMediaId] = useState<string | null>(null);
   const [manualDateInput, setManualDateInput] = useState<string>('');
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [showAllUnknown, setShowAllUnknown] = useState(false);
 
   // Map moment by media ID
   const momentByMediaId = useMemo(() => {
@@ -74,7 +76,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     };
   }, [media]);
 
-  // Conservative suggestions: find clusters of dated items captured within 45 mins without common moment
+  // Conservative suggestions: find clusters of dated items captured within 45 mins where not all items have an assigned moment
   const suggestedClusters = useMemo(() => {
     const dated = media
       .filter((m) => m.captureTime && m.captureTimeSource !== 'unknown')
@@ -96,10 +98,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           currentCluster.push(item);
         } else {
           if (currentCluster.length >= 2) {
-            // Check if cluster already shares a common moment
-            const firstMoment = momentByMediaId.get(currentCluster[0].id);
-            const allShare = firstMoment && currentCluster.every((m) => momentByMediaId.get(m.id)?.id === firstMoment.id);
-            if (!allShare) {
+            // Suggest only if not all items in cluster are already assigned to a moment
+            const allOrganized = currentCluster.every((m) => momentByMediaId.has(m.id));
+            if (!allOrganized) {
               const startT = new Date(currentCluster[0].captureTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               const endT = new Date(currentCluster[currentCluster.length - 1].captureTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               clusters.push({
@@ -115,9 +116,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     }
 
     if (currentCluster.length >= 2) {
-      const firstMoment = momentByMediaId.get(currentCluster[0].id);
-      const allShare = firstMoment && currentCluster.every((m) => momentByMediaId.get(m.id)?.id === firstMoment.id);
-      if (!allShare) {
+      const allOrganized = currentCluster.every((m) => momentByMediaId.has(m.id));
+      if (!allOrganized) {
         const startT = new Date(currentCluster[0].captureTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const endT = new Date(currentCluster[currentCluster.length - 1].captureTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         clusters.push({
@@ -134,12 +134,17 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const handleSaveManualDate = (mediaId: string) => {
     if (manualDateInput) {
       try {
-        const iso = new Date(manualDateInput).toISOString();
-        onUpdateMediaCaptureTime(mediaId, iso);
+        const parsed = new Date(manualDateInput);
+        if (isNaN(parsed.getTime())) {
+          setDateError('Please enter a valid date and time.');
+          return;
+        }
+        onUpdateMediaCaptureTime(mediaId, parsed.toISOString());
         setEditingMediaId(null);
         setManualDateInput('');
+        setDateError(null);
       } catch {
-        alert('Please enter a valid date and time.');
+        setDateError('Please enter a valid date and time.');
       }
     }
   };
@@ -216,7 +221,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
       {/* Dated Timeline Days */}
       {datedGroups.map(([dayTitle, items]) => (
         <section key={dayTitle} className="space-y-4">
-          <div className="sticky top-16 z-20 bg-background/95 backdrop-blur-sm py-2 border-b border-border flex items-baseline justify-between">
+          <div className="sticky top-16 z-10 bg-background/95 backdrop-blur-sm py-2 border-b border-border flex items-baseline justify-between">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-accent" />
               <h3 className="text-base sm:text-lg font-semibold text-charcoal">{dayTitle}</h3>
@@ -277,10 +282,18 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 These media items do not contain verified capture timestamps in their file headers. You may assign an approximate date manually.
               </p>
             </div>
+            {unknownDateItems.length > 12 && (
+              <button
+                onClick={() => setShowAllUnknown((prev) => !prev)}
+                className="px-3 py-1.5 bg-surface border border-border rounded-lg text-xs font-medium text-charcoal hover:bg-surface-muted transition-colors shrink-0"
+              >
+                {showAllUnknown ? 'Show first 12' : `Show all ${unknownDateItems.length}`}
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {unknownDateItems.map((item) => (
+            {(showAllUnknown ? unknownDateItems : unknownDateItems.slice(0, 12)).map((item) => (
               <div key={item.id} className="space-y-2 bg-surface p-2 rounded-xl border border-border">
                 <FlowCard media={item} onOpen={onOpenMedia} layoutVariant="standard" />
 
@@ -294,13 +307,22 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                       <input
                         type="datetime-local"
                         value={manualDateInput}
-                        onChange={(e) => setManualDateInput(e.target.value)}
+                        onChange={(e) => {
+                          setManualDateInput(e.target.value);
+                          if (dateError) setDateError(null);
+                        }}
                         className="w-full px-2 py-1 text-xs border border-border rounded bg-surface text-charcoal"
                       />
+                      {dateError && (
+                        <p className="text-[11px] text-red-600 font-medium">{dateError}</p>
+                      )}
                       <div className="flex items-center gap-1.5 justify-end">
                         <button
                           type="button"
-                          onClick={() => setEditingMediaId(null)}
+                          onClick={() => {
+                            setEditingMediaId(null);
+                            setDateError(null);
+                          }}
                           className="px-2 py-1 text-[11px] text-charcoal-muted hover:bg-surface rounded"
                         >
                           Cancel
@@ -322,6 +344,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         onClick={() => {
                           setEditingMediaId(item.id);
                           setManualDateInput(new Date().toISOString().slice(0, 16));
+                          setDateError(null);
                         }}
                         className="text-accent hover:underline flex items-center gap-1 text-[11px] font-medium min-h-[32px]"
                       >
@@ -334,6 +357,17 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               </div>
             ))}
           </div>
+
+          {!showAllUnknown && unknownDateItems.length > 12 && (
+            <div className="text-center pt-2">
+              <button
+                onClick={() => setShowAllUnknown(true)}
+                className="px-4 py-2 bg-surface border border-border rounded-lg text-xs font-medium text-accent hover:bg-surface-muted transition-colors shadow-subtle"
+              >
+                Show {unknownDateItems.length - 12} more un-dated memories
+              </button>
+            </div>
+          )}
         </section>
       )}
     </div>

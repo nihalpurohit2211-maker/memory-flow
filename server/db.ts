@@ -665,6 +665,228 @@ export function getAllContributionsForCollection(slug: string = 'elevate'): Medi
   }));
 }
 
+export function getAllPeopleGroupsForCollection(slug: string = 'elevate'): any[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT pg.*,
+      (SELECT mp.media_id FROM media_people mp WHERE mp.person_group_id = pg.id LIMIT 1) as cover_media_id,
+      (SELECT COUNT(*) FROM media_people mp WHERE mp.person_group_id = pg.id) as media_count
+    FROM people_groups pg
+    WHERE pg.collection_slug = ?
+    ORDER BY pg.created_at ASC
+  `).all(slug) as any[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    isConfirmed: r.is_confirmed === 1,
+    consented: r.consented === 1,
+    createdAt: r.created_at,
+    coverMediaId: r.cover_media_id || null,
+    mediaCount: r.media_count || 0,
+  }));
+}
+
+export function updatePersonGroupLabel(groupId: string, label: string): boolean {
+  const db = getDb();
+  const res = db.prepare(`
+    UPDATE people_groups
+    SET label = ?, is_confirmed = 1
+    WHERE id = ?
+  `).run(label, groupId);
+  return res.changes > 0;
+}
+
+export function saveEmbeddingsBatch(items: { mediaId: string; embedding: number[] }[], modelName = 'openai/clip-vit-base-patch32'): number {
+  const db = getDb();
+  const insert = db.prepare(`
+    INSERT OR REPLACE INTO embeddings (media_id, model_name, vector_json, created_at)
+    VALUES (?, ?, ?, ?)
+  `);
+  const updateStatus = db.prepare(`
+    UPDATE media_items SET embedding_status = 'ready' WHERE id = ?
+  `);
+
+  const now = new Date().toISOString();
+  let count = 0;
+
+  const runTx = db.transaction((list: any[]) => {
+    for (const item of list) {
+      if (item.mediaId && Array.isArray(item.embedding)) {
+        insert.run(item.mediaId, modelName, JSON.stringify(item.embedding), now);
+        updateStatus.run(item.mediaId);
+        count++;
+      }
+    }
+  });
+
+  runTx(items);
+  return count;
+}
+
+export function saveFaceGroupsBatch(slug: string, groups: { groupId: string; label?: string; mediaIds: string[] }[]): number {
+  const db = getDb();
+  const insertGroup = db.prepare(`
+    INSERT OR REPLACE INTO people_groups (id, collection_slug, label, is_confirmed, consented, created_at)
+    VALUES (?, ?, ?, 0, 0, ?)
+  `);
+  const insertMember = db.prepare(`
+    INSERT OR REPLACE INTO media_people (media_id, person_group_id, is_confirmed)
+    VALUES (?, ?, 0)
+  `);
+
+  const now = new Date().toISOString();
+  let count = 0;
+
+  const runTx = db.transaction((list: any[]) => {
+    for (const g of list) {
+      const gid = g.groupId || `person_${Date.now()}_${count}`;
+      insertGroup.run(gid, slug, g.label || '', now);
+      if (Array.isArray(g.mediaIds)) {
+        for (const mid of g.mediaIds) {
+          insertMember.run(mid, gid);
+        }
+      }
+      count++;
+    }
+  });
+
+  runTx(groups);
+  return count;
+}
+
+export function searchCollectionMediaAndMoments(slug: string, query: string): { media: MediaItem[]; moments: Moment[] } {
+  const db = getDb();
+  const q = `%${query.trim()}%`;
+
+  const mediaRows = db.prepare(`
+    SELECT DISTINCT m.*
+    FROM media_items m
+    LEFT JOIN media_activities ma ON m.id = ma.media_id
+    LEFT JOIN media_places mp ON m.id = mp.media_id
+    LEFT JOIN places p ON mp.place_id = p.id
+    WHERE m.collection_slug = ? AND (
+      m.caption LIKE ? OR
+      m.original_name LIKE ? OR
+      m.contributor_name LIKE ? OR
+      ma.activity_name LIKE ? OR
+      p.name LIKE ?
+    )
+    LIMIT 100
+  `).all(slug, q, q, q, q, q) as any[];
+
+  const placeStmt = db.prepare(`
+    SELECT p.name FROM media_places mp
+    JOIN places p ON mp.place_id = p.id
+    WHERE mp.media_id = ?
+  `);
+  const actStmt = db.prepare('SELECT activity_name FROM media_activities WHERE media_id = ?');
+
+  const media: MediaItem[] = mediaRows.map((r) => {
+    const places = (placeStmt.all(r.id) as any[]).map((p) => p.name);
+    const activities = (actStmt.all(r.id) as any[]).map((a) => a.activity_name);
+
+    return {
+      id: r.id,
+      eventId: r.collection_slug,
+      originalName: r.original_name,
+      mimeType: r.mime_type,
+      size: r.size,
+      width: r.width,
+      height: r.height,
+      duration: r.duration,
+      captureTime: r.capture_time,
+      captureTimeSource: r.capture_time_source,
+      timezoneKnown: r.timezone_known === 1,
+      importedAt: r.imported_at,
+      fileModifiedAt: r.file_modified_at,
+      processingStatus: r.processing_status,
+      hash: r.hash,
+      duplicateGroupId: r.duplicate_group_id,
+      thumbnailUrl: r.thumbnail_url,
+      lowResUrl: r.low_res_url,
+      driveFileId: r.drive_file_id,
+      driveFullUrl: r.drive_full_url,
+      driveParentFolderId: r.drive_parent_folder_id,
+      caption: r.caption,
+      contributorName: r.contributor_name,
+      contributorVerified: r.contributor_verified === 1,
+      isDamaged: r.is_damaged === 1,
+      damageNotes: r.damage_notes,
+      places: places.length > 0 ? places : undefined,
+      activities: activities.length > 0 ? activities : undefined,
+    };
+  });
+
+  const momentRows = db.prepare(`
+    SELECT * FROM moments
+    WHERE collection_slug = ? AND (
+      label LIKE ? OR
+      description LIKE ?
+    )
+    LIMIT 20
+  `).all(slug, q, q) as any[];
+
+  const moments: Moment[] = momentRows.map((r) => ({
+    id: r.id,
+    eventId: r.collection_slug,
+    label: r.label,
+    labelSource: r.label_source,
+    coverMediaId: r.cover_media_id,
+    description: r.description,
+    isProvisional: r.is_provisional === 1,
+    provisionalReasons: r.provisional_reasons ? JSON.parse(r.provisional_reasons) : [],
+    createdAt: r.created_at,
+  }));
+
+  return { media, moments };
+}
+
+export function getAllCollectionsList(): any[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT c.*,
+      (SELECT COUNT(*) FROM media_items m WHERE m.collection_slug = c.slug) as media_count,
+      (SELECT COUNT(*) FROM moments mo WHERE mo.collection_slug = c.slug) as moment_count
+    FROM collections c
+    ORDER BY c.created_at ASC
+  `).all() as any[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    description: r.description,
+    driveFolderId: r.drive_folder_id,
+    visibility: r.visibility,
+    hasPassword: !!r.password_hash,
+    passwordHint: r.password_hint,
+    mediaCount: r.media_count,
+    momentCount: r.moment_count,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export function createNewCollection(name: string, slug: string, driveFolderId?: string | null, visibility = 'password'): any {
+  const db = getDb();
+  const id = `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO collections (id, slug, name, description, drive_folder_id, visibility, access_epoch, people_grouping_enabled, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+  `).run(id, slug, name, `${name} Event Memories`, driveFolderId || null, visibility, now, now);
+
+  return { id, slug, name, visibility, createdAt: now };
+}
+
+export function deleteCollectionBySlug(slug: string): boolean {
+  const db = getDb();
+  const res = db.prepare('DELETE FROM collections WHERE slug = ?').run(slug);
+  return res.changes > 0;
+}
+
 /**
  * Closes active database connection (used for testing or clean restarts)
  */
@@ -678,3 +900,4 @@ export function closeDatabase(): void {
     dbInstance = null;
   }
 }
+

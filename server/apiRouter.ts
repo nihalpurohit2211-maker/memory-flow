@@ -19,6 +19,7 @@ import {
   createAdminSession,
   verifyAdminSession,
   revokeAdminSession,
+  changeAdminPassphrase,
   createOrUpdatePlace,
   renamePlace,
   mergePlaces,
@@ -33,6 +34,15 @@ import {
   getAllPlacesForCollection,
   getAllContributionsForCollection,
   getAllMediaForCollection,
+  getAllPeopleGroupsForCollection,
+  updatePersonGroupLabel,
+  saveEmbeddingsBatch,
+  saveFaceGroupsBatch,
+  searchCollectionMediaAndMoments,
+  getAllCollectionsList,
+  createNewCollection,
+  deleteCollectionBySlug,
+  getDb,
 } from './db';
 
 export const apiRouter = Router();
@@ -712,4 +722,104 @@ apiRouter.post('/collections/:slug/sync', (req: Request, res: Response) => {
     mediaCount: data.mediaItems.length,
     momentsCount: data.moments.length,
   });
+});
+
+// Admin change passphrase endpoint
+apiRouter.post('/admin/change-passphrase', requireAdminAuth, (req: Request, res: Response) => {
+  const { newPassphrase } = req.body || {};
+  if (!newPassphrase || typeof newPassphrase !== 'string' || newPassphrase.trim().length < 6) {
+    return res.status(400).json({ error: 'Passphrase must be at least 6 characters long' });
+  }
+
+  changeAdminPassphrase(newPassphrase.trim());
+  const newToken = createAdminSession();
+  return res.json({ success: true, token: newToken, message: 'Admin passphrase updated successfully' });
+});
+
+// Admin collections CRUD
+apiRouter.get('/admin/collections', requireAdminAuth, (_req: Request, res: Response) => {
+  const collections = getAllCollectionsList();
+  return res.json({ collections });
+});
+
+apiRouter.post('/admin/collections', requireAdminAuth, (req: Request, res: Response) => {
+  const { name, slug, driveFolderId, visibility } = req.body || {};
+  if (!name || !slug) {
+    return res.status(400).json({ error: 'Name and slug are required' });
+  }
+  const cleanSlug = String(slug).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const col = createNewCollection(name, cleanSlug, driveFolderId, visibility || 'password');
+  return res.json({ success: true, collection: col });
+});
+
+apiRouter.delete('/admin/collections/:slug', requireAdminAuth, (req: Request, res: Response) => {
+  const { slug } = req.params;
+  const success = deleteCollectionBySlug(slug);
+  return res.json({ success });
+});
+
+// Search endpoint across collection media, moments, places, and activities
+apiRouter.get('/collections/:slug/search', (req: Request, res: Response) => {
+  const { slug } = req.params;
+  const query = (req.query.q as string) || '';
+  if (!query.trim()) {
+    return res.json({ media: [], moments: [] });
+  }
+  const results = searchCollectionMediaAndMoments(slug, query);
+  return res.json(results);
+});
+
+// People groups endpoints
+apiRouter.get('/collections/:slug/people-groups', (req: Request, res: Response) => {
+  const { slug } = req.params;
+  const groups = getAllPeopleGroupsForCollection(slug);
+  return res.json({ groups });
+});
+
+apiRouter.post('/collections/:slug/admin/people-groups/:groupId', requireAdminAuth, (req: Request, res: Response) => {
+  const { groupId } = req.params;
+  const { label } = req.body || {};
+  if (typeof label !== 'string') {
+    return res.status(400).json({ error: 'Label string is required' });
+  }
+  const success = updatePersonGroupLabel(groupId, label.trim());
+  return res.json({ success, groupId, label: label.trim() });
+});
+
+// AI data import endpoints (from Google Colab JSON exports)
+apiRouter.post('/collections/:slug/admin/import/embeddings', requireAdminAuth, (req: Request, res: Response) => {
+  const { items, model } = req.body || {};
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: 'Expected items array in JSON body' });
+  }
+  const count = saveEmbeddingsBatch(items, model || 'openai/clip-vit-base-patch32');
+  return res.json({ success: true, count, message: `Imported ${count} visual embeddings` });
+});
+
+apiRouter.post('/collections/:slug/admin/import/face-groups', requireAdminAuth, (req: Request, res: Response) => {
+  const { slug } = req.params;
+  const { groups } = req.body || {};
+  if (!Array.isArray(groups)) {
+    return res.status(400).json({ error: 'Expected groups array in JSON body' });
+  }
+  const count = saveFaceGroupsBatch(slug, groups);
+  return res.json({ success: true, count, message: `Imported ${count} face groups` });
+});
+
+// Visitor caption suggestion endpoint
+apiRouter.post('/collections/:slug/media/:mediaId/suggest-caption', (req: Request, res: Response) => {
+  const { slug, mediaId } = req.params;
+  const { visitorName, caption } = req.body || {};
+  if (!caption || typeof caption !== 'string' || !caption.trim()) {
+    return res.status(400).json({ error: 'Caption text is required' });
+  }
+
+  const db = getDb();
+  const id = `sugg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  db.prepare(`
+    INSERT INTO visitor_suggestions (id, collection_slug, visitor_name, media_id, target_moment_id, action, note, status, created_at)
+    VALUES (?, ?, ?, ?, '', 'caption', ?, 'pending', ?)
+  `).run(id, slug, visitorName || 'Visitor', mediaId, caption.trim(), new Date().toISOString());
+
+  return res.json({ success: true, id, message: 'Caption submitted for organizer review' });
 });

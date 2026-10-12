@@ -4,7 +4,6 @@ import {
   Compass,
   Calendar,
   Grid,
-  FolderUp,
   Edit3,
   Check,
   X,
@@ -14,7 +13,10 @@ import {
   FolderSync,
   Inbox,
   Share2,
+  Users,
+  Layers,
 } from 'lucide-react';
+import { SearchBox } from './SearchBox';
 
 interface HeaderProps {
   event: EventWorkspace;
@@ -33,6 +35,12 @@ interface HeaderProps {
   collectionVisibility?: string;
   pendingSuggestionsCount: number;
   isDriveConnected: boolean;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  onClearSearch?: () => void;
+  onOpenPeoplePanel?: () => void;
+  onOpenAiImport?: () => void;
+  onOpenCollectionsPanel?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,6 +60,12 @@ export const Header: React.FC<HeaderProps> = ({
   collectionVisibility,
   pendingSuggestionsCount,
   isDriveConnected,
+  searchQuery = '',
+  onSearchChange,
+  onClearSearch,
+  onOpenPeoplePanel,
+  onOpenAiImport,
+  onOpenCollectionsPanel,
 }) => {
   const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [editedTitle, setEditedTitle] = useState(event.title);
@@ -111,6 +125,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-charcoal truncate">
                     {event.title}
+                    {totalMediaCount > 0 && (
+                      <span className="text-xs sm:text-sm font-normal text-charcoal-muted ml-2">
+                        ({totalMediaCount})
+                      </span>
+                    )}
                   </h1>
                   <button
                     onClick={() => {
@@ -134,8 +153,19 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* SearchBox: Always visible */}
+        {onSearchChange && onClearSearch && (
+          <div className="w-full md:w-auto md:flex-1 md:max-w-xs lg:max-w-sm px-1">
+            <SearchBox
+              value={searchQuery}
+              onChange={onSearchChange}
+              onClear={onClearSearch}
+            />
+          </div>
+        )}
+
         {/* Center / Right: Nav Mode & Discovery & Import */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           {/* Navigation Views */}
           <nav aria-label="Views" className="flex items-center bg-surface-muted p-1 rounded-lg border border-border">
             <button
@@ -179,24 +209,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Prominent Discovery Action: Take Me Somewhere */}
           <button
             onClick={onTakeMeSomewhere}
-            className="flex items-center gap-2 px-3.5 py-2 bg-accent hover:bg-accent-hover text-surface rounded-lg text-xs sm:text-sm font-medium shadow-subtle active:scale-[0.98] transition-all min-h-[44px]"
+            className="flex items-center gap-2 px-3 py-2 bg-accent hover:bg-accent-hover text-surface rounded-lg text-xs sm:text-sm font-medium shadow-subtle active:scale-[0.98] transition-all min-h-[44px]"
             aria-label="Take me somewhere in the event"
           >
             <Sparkles className="w-4 h-4 text-accent-light" />
-            <span className="font-semibold whitespace-nowrap">Take Me Somewhere</span>
-          </button>
-
-          {/* Import / Collection Button */}
-          <button
-            onClick={onOpenImporter}
-            className="flex items-center gap-2 px-3 py-2 bg-surface hover:bg-surface-muted text-charcoal border border-border rounded-lg text-xs sm:text-sm font-medium transition-colors min-h-[44px]"
-            aria-label="Import local photos or videos"
-          >
-            <FolderUp className="w-4 h-4 text-accent" />
-            <span className="hidden sm:inline">Import</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-surface-muted text-charcoal-muted border border-border">
-              {totalMediaCount}
-            </span>
+            <span className="font-semibold whitespace-nowrap hidden lg:inline">Take Me Somewhere</span>
           </button>
 
           {/* Role Switcher Pill */}
@@ -227,17 +244,50 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Admin Protected Action Buttons */}
           {currentRole === 'admin' && (
             <>
+              {onOpenPeoplePanel && (
+                <button
+                  onClick={onOpenPeoplePanel}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-surface hover:bg-surface-muted text-charcoal border border-border rounded-lg text-xs font-medium transition-colors min-h-[44px]"
+                  title="People & Face Clusters"
+                  aria-label="People & Face Clusters"
+                >
+                  <Users className="w-4 h-4 text-accent" />
+                  <span className="hidden xl:inline">People</span>
+                </button>
+              )}
+
+              {onOpenAiImport && (
+                <button
+                  onClick={onOpenAiImport}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-surface hover:bg-surface-muted text-charcoal border border-border rounded-lg text-xs font-medium transition-colors min-h-[44px]"
+                  title="Import Colab AI Data"
+                  aria-label="Import Colab AI Data"
+                >
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  <span className="hidden xl:inline">AI Import</span>
+                </button>
+              )}
+
+              {onOpenCollectionsPanel && (
+                <button
+                  onClick={onOpenCollectionsPanel}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-surface hover:bg-surface-muted text-charcoal border border-border rounded-lg text-xs font-medium transition-colors min-h-[44px]"
+                  title="Manage Collections"
+                  aria-label="Manage Collections"
+                >
+                  <Layers className="w-4 h-4 text-accent" />
+                  <span className="hidden xl:inline">Collections</span>
+                </button>
+              )}
+
               <button
                 onClick={onOpenDriveConfig}
                 className="flex items-center gap-1.5 px-3 py-2 bg-surface hover:bg-surface-muted text-charcoal border border-border rounded-lg text-xs font-medium transition-colors min-h-[44px]"
-                aria-label="Google Drive & AI Settings"
-                title="Google Drive & AI Settings"
+                aria-label="Google Drive Sync Config"
+                title={isDriveConnected ? 'Google Drive Connected' : 'Connect Google Drive'}
               >
-                <FolderSync className="w-4 h-4 text-accent" />
-                <span className="hidden md:inline">Drive & AI</span>
-                {isDriveConnected && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" title="Drive connected" />
-                )}
+                <FolderSync className={`w-4 h-4 ${isDriveConnected ? 'text-accent' : 'text-charcoal-muted'}`} />
+                <span className="hidden xl:inline">Drive</span>
               </button>
 
               <button
