@@ -42,6 +42,7 @@ import {
   getAllCollectionsList,
   createNewCollection,
   deleteCollectionBySlug,
+  syncCollectionItemsToDb,
   getDb,
 } from './db';
 
@@ -707,6 +708,8 @@ apiRouter.get('/uploads/:filename', (req: Request, res: Response) => {
 apiRouter.post('/collections/:slug/sync', (req: Request, res: Response) => {
   const { slug } = req.params;
   const { moments, mediaItems, memberships, connections } = req.body || {};
+
+  syncCollectionItemsToDb(slug, mediaItems, moments, memberships, connections);
 
   const data = loadServerData(slug);
   if (Array.isArray(moments)) data.moments = moments;

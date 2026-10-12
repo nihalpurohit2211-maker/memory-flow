@@ -23,6 +23,7 @@ import {
   getAllPlacesForCollection,
   getAllSuggestionsForCollection,
   getAllContributionsForCollection,
+  syncCollectionItemsToDb,
 } from './db';
 
 export type CollectionVisibility = 'public' | 'unlisted' | 'password';
@@ -325,6 +326,15 @@ export function saveServerData(data: CollectionDataStore): void {
     data.collection.peopleGroupingEnabled ? 1 : 0,
     data.collection.createdAt,
     now
+  );
+
+  // Persist collection items to SQLite tables
+  syncCollectionItemsToDb(
+    slug,
+    data.mediaItems,
+    data.moments,
+    data.memberships,
+    data.connections
   );
 
   // Mirror JSON backup

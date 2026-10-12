@@ -488,6 +488,148 @@ function migrateFromLegacyJsonIfEmpty(db: DatabaseType): void {
 }
 
 /**
+ * Persists synchronised collection media, moments, memberships, and connections into SQLite
+ */
+export function syncCollectionItemsToDb(
+  slug: string,
+  mediaItems?: any[],
+  moments?: any[],
+  memberships?: any[],
+  connections?: any[]
+): void {
+  const db = getDb();
+
+  // 1. Media items
+  if (Array.isArray(mediaItems) && mediaItems.length > 0) {
+    const insertMedia = db.prepare(`
+      INSERT OR REPLACE INTO media_items (
+        id, collection_slug, original_name, mime_type, size, width, height, duration,
+        capture_time, capture_time_source, timezone_known, drive_file_id, thumbnail_url,
+        low_res_url, drive_full_url, drive_parent_folder_id, caption, contributor_name,
+        contributor_verified, is_damaged, damage_notes, imported_at, file_modified_at,
+        processing_status, hash, duplicate_group_id, near_duplicate_of_id, near_duplicate_similarity, embedding_status
+      ) VALUES (
+        @id, @collection_slug, @original_name, @mime_type, @size, @width, @height, @duration,
+        @capture_time, @capture_time_source, @timezone_known, @drive_file_id, @thumbnail_url,
+        @low_res_url, @drive_full_url, @drive_parent_folder_id, @caption, @contributor_name,
+        @contributor_verified, @is_damaged, @damage_notes, @imported_at, @file_modified_at,
+        @processing_status, @hash, @duplicate_group_id, @near_duplicate_of_id, @near_duplicate_similarity, @embedding_status
+      )
+    `);
+
+    const insertManyMedia = db.transaction((items: any[]) => {
+      for (const item of items) {
+        insertMedia.run({
+          id: item.id,
+          collection_slug: slug,
+          original_name: item.originalName || 'Untitled',
+          mime_type: item.mimeType || 'image/jpeg',
+          size: item.size || 0,
+          width: item.width || null,
+          height: item.height || null,
+          duration: item.duration || null,
+          capture_time: item.captureTime || null,
+          capture_time_source: item.captureTimeSource || 'unknown',
+          timezone_known: item.timezoneKnown ? 1 : 0,
+          drive_file_id: item.driveFileId || null,
+          thumbnail_url: item.thumbnailUrl || '',
+          low_res_url: item.lowResUrl || item.thumbnailUrl || '',
+          drive_full_url: item.driveFullUrl || null,
+          drive_parent_folder_id: item.driveParentFolderId || null,
+          caption: item.caption || null,
+          contributor_name: item.contributorName || null,
+          contributor_verified: item.contributorVerified ? 1 : 0,
+          is_damaged: item.isDamaged ? 1 : 0,
+          damage_notes: item.damageNotes || null,
+          imported_at: item.importedAt || new Date().toISOString(),
+          file_modified_at: item.fileModifiedAt || null,
+          processing_status: item.processingStatus || 'ready',
+          hash: item.hash || null,
+          duplicate_group_id: item.duplicateGroupId || null,
+          near_duplicate_of_id: item.nearDuplicateOfId || null,
+          near_duplicate_similarity: item.nearDuplicateSimilarity || null,
+          embedding_status: item.embeddingStatus || 'pending',
+        });
+      }
+    });
+
+    insertManyMedia(mediaItems);
+  }
+
+  // 2. Moments
+  if (Array.isArray(moments) && moments.length > 0) {
+    const insertMoment = db.prepare(`
+      INSERT OR REPLACE INTO moments (id, collection_slug, label, label_source, cover_media_id, description, is_provisional, provisional_reasons, created_at)
+      VALUES (@id, @collection_slug, @label, @label_source, @cover_media_id, @description, @is_provisional, @provisional_reasons, @created_at)
+    `);
+
+    const insertManyMoments = db.transaction((moms: any[]) => {
+      for (const m of moms) {
+        insertMoment.run({
+          id: m.id,
+          collection_slug: slug,
+          label: m.label || 'Moment',
+          label_source: m.labelSource || 'organizer',
+          cover_media_id: m.coverMediaId || null,
+          description: m.description || null,
+          is_provisional: m.isProvisional ? 1 : 0,
+          provisional_reasons: JSON.stringify(m.provisionalReasons || []),
+          created_at: m.createdAt || new Date().toISOString(),
+        });
+      }
+    });
+
+    insertManyMoments(moments);
+  }
+
+  // 3. Memberships
+  if (Array.isArray(memberships) && memberships.length > 0) {
+    const insertMembership = db.prepare(`
+      INSERT OR REPLACE INTO memberships (media_id, moment_id, source, confidence)
+      VALUES (@media_id, @moment_id, @source, @confidence)
+    `);
+
+    const insertManyMemberships = db.transaction((mems: any[]) => {
+      for (const m of mems) {
+        insertMembership.run({
+          media_id: m.mediaId,
+          moment_id: m.momentId,
+          source: m.source || 'manual',
+          confidence: m.confidence || 1.0,
+        });
+      }
+    });
+
+    insertManyMemberships(memberships);
+  }
+
+  // 4. Connections
+  if (Array.isArray(connections) && connections.length > 0) {
+    const insertConnection = db.prepare(`
+      INSERT OR REPLACE INTO connections (id, collection_slug, source_moment_id, target_moment_id, type, provenance, evidence, confidence)
+      VALUES (@id, @collection_slug, @source_moment_id, @target_moment_id, @type, @provenance, @evidence, @confidence)
+    `);
+
+    const insertManyConnections = db.transaction((conns: any[]) => {
+      for (const c of conns) {
+        insertConnection.run({
+          id: c.id,
+          collection_slug: slug,
+          source_moment_id: c.sourceMomentId,
+          target_moment_id: c.targetMomentId,
+          type: c.type || 'related',
+          provenance: c.provenance || 'suggested',
+          evidence: c.evidence || null,
+          confidence: c.confidence || null,
+        });
+      }
+    });
+
+    insertManyConnections(connections);
+  }
+}
+
+/**
  * Backup SQLite database to a destination file (or default timestamped snapshot in data/backups)
  */
 export async function backupDatabase(destPath?: string): Promise<string> {

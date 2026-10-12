@@ -32,6 +32,7 @@ import {
   fetchCollectionData,
   getVisitorToken,
   clearVisitorToken,
+  syncCollectionToServer,
 } from './lib/collectionApi';
 import { SharedCollectionInfo, PersonGroup } from './types';
 import { pickTakeMeSomewhere, RecommendationResult } from './lib/recommendation';
@@ -211,6 +212,18 @@ export default function App() {
         setMemberships(storedMemberships);
         setConnections(storedConnections);
         setVisits(storedVisits);
+
+        // Auto-sync to server so all visitors and incognito sessions can immediately see the collection!
+        syncCollectionToServer('elevate', {
+          moments: storedMoments,
+          mediaItems: storedMedia,
+          memberships: storedMemberships,
+          connections: storedConnections,
+        }).then((res) => {
+          console.log('[Auto-Sync] Local memories published to server for visitors:', res);
+        }).catch((err) => {
+          console.warn('[Auto-Sync] Auto-sync to server failed:', err);
+        });
       }
     } catch {
       // IndexedDB fallback failed

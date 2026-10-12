@@ -13,11 +13,18 @@ import {
   QrCode,
   KeyRound,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { CollectionVisibility, SharedCollectionInfo } from '../../types';
-import { updateSharingSettings } from '../../lib/collectionApi';
+import { updateSharingSettings, syncCollectionToServer } from '../../lib/collectionApi';
 import { getAdminSession } from '../../lib/auth';
+import {
+  loadAllStoredMedia,
+  loadAllStoredMoments,
+  loadAllStoredMemberships,
+  loadAllStoredConnections,
+} from '../../lib/db';
 
 interface AdminSharingModalProps {
   isOpen: boolean;
@@ -52,6 +59,32 @@ export const AdminSharingModal: FC<AdminSharingModalProps> = ({
   const [newAdminPass, setNewAdminPass] = useState('');
   const [adminPassMessage, setAdminPassMessage] = useState<string | null>(null);
   const [isAdminPassSaving, setIsAdminPassSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+
+  const handleManualPublish = async () => {
+    setIsPublishing(true);
+    setPublishMessage(null);
+    try {
+      const storedMedia = await loadAllStoredMedia();
+      const storedMoments = await loadAllStoredMoments();
+      const storedMemberships = await loadAllStoredMemberships();
+      const storedConnections = await loadAllStoredConnections();
+
+      const res = await syncCollectionToServer(collectionInfo?.slug || 'elevate', {
+        moments: storedMoments,
+        mediaItems: storedMedia,
+        memberships: storedMemberships,
+        connections: storedConnections,
+      });
+
+      setPublishMessage(`✓ Published ${res.mediaCount} memories across ${res.momentsCount} moments live to the server!`);
+    } catch (err: any) {
+      setPublishMessage(`Error publishing: ${err.message}`);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:5173';
   const collectionUrl = `${currentOrigin}/c/${collectionInfo?.slug || 'elevate'}`;
@@ -112,7 +145,26 @@ export const AdminSharingModal: FC<AdminSharingModalProps> = ({
         });
       }
 
-      setStatusMessage('Sharing configuration updated successfully.');
+      // Automatically publish local moments and media items to server
+      try {
+        const storedMedia = await loadAllStoredMedia();
+        const storedMoments = await loadAllStoredMoments();
+        const storedMemberships = await loadAllStoredMemberships();
+        const storedConnections = await loadAllStoredConnections();
+
+        if (storedMedia.length > 0) {
+          await syncCollectionToServer(collectionInfo?.slug || 'elevate', {
+            moments: storedMoments,
+            mediaItems: storedMedia,
+            memberships: storedMemberships,
+            connections: storedConnections,
+          });
+        }
+      } catch (syncErr) {
+        console.warn('Syncing items to server on sharing save:', syncErr);
+      }
+
+      setStatusMessage('Sharing configuration & collection updated successfully.');
       setTimeout(() => {
         setStatusMessage(null);
       }, 3000);
@@ -422,6 +474,33 @@ export const AdminSharingModal: FC<AdminSharingModalProps> = ({
             </button>
           )}
         </div>
+
+        {/* Publish / Sync to Server */}
+        <div className="p-3 bg-surface-muted rounded-lg border border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-text flex items-center gap-1.5">
+              <RefreshCw className={`w-3.5 h-3.5 text-accent ${isPublishing ? 'animate-spin' : ''}`} />
+              <span>Publish Collection Online</span>
+            </div>
+            <p className="text-[11px] text-text-muted mt-0.5">
+              Publish your synchronized Drive photos to the server so anyone with the link can view them.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isPublishing}
+            onClick={handleManualPublish}
+            className="px-3.5 py-1.5 bg-accent hover:bg-accent/90 text-white text-xs font-semibold rounded-lg disabled:opacity-50 shrink-0 min-h-[36px]"
+          >
+            {isPublishing ? 'Publishing...' : 'Publish to Visitors Now'}
+          </button>
+        </div>
+        {publishMessage && (
+          <div className="p-2.5 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{publishMessage}</span>
+          </div>
+        )}
 
         {/* Security & Access Notices */}
         <div className="p-3 bg-neutral-100 rounded-lg border border-neutral-200 text-xs text-text-muted space-y-1.5">

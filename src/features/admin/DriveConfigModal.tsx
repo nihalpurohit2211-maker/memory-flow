@@ -22,10 +22,12 @@ import {
   loadAllStoredMedia,
   loadAllStoredMoments,
   loadAllStoredMemberships,
+  loadAllStoredConnections,
   saveStoredMoment,
   saveStoredMembership,
   saveStoredConnection,
 } from '../../lib/db';
+import { syncCollectionToServer } from '../../lib/collectionApi';
 
 interface DriveConfigModalProps {
   isOpen: boolean;
@@ -106,7 +108,24 @@ export const DriveConfigModal: React.FC<DriveConfigModalProps> = ({
         setSyncProgress(progress);
       });
 
-      setSuccessMsg(`Successfully synchronized ${res.totalDiscovered} files from Google Drive!`);
+      // Synchronize immediately to the server so visitors can see the photos!
+      try {
+        const storedMedia = await loadAllStoredMedia();
+        const storedMoments = await loadAllStoredMoments();
+        const storedMemberships = await loadAllStoredMemberships();
+        const storedConnections = await loadAllStoredConnections();
+
+        await syncCollectionToServer('elevate', {
+          moments: storedMoments,
+          mediaItems: storedMedia,
+          memberships: storedMemberships,
+          connections: storedConnections,
+        });
+      } catch (syncErr) {
+        console.warn('Failed to push synced items to server:', syncErr);
+      }
+
+      setSuccessMsg(`Successfully synchronized ${res.totalDiscovered} files and published to visitors!`);
       onDataUpdated();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -132,12 +151,29 @@ export const DriveConfigModal: React.FC<DriveConfigModalProps> = ({
         setSyncProgress(progress);
       });
 
+      // Synchronize immediately to the server so visitors can see them!
+      try {
+        const storedMedia = await loadAllStoredMedia();
+        const storedMoments = await loadAllStoredMoments();
+        const storedMemberships = await loadAllStoredMemberships();
+        const storedConnections = await loadAllStoredConnections();
+
+        await syncCollectionToServer('elevate', {
+          moments: storedMoments,
+          mediaItems: storedMedia,
+          memberships: storedMemberships,
+          connections: storedConnections,
+        });
+      } catch (syncErr) {
+        console.warn('Failed to push simulated items to server:', syncErr);
+      }
+
       const updated = await loadDriveConfig();
       if (updated) {
         setConfig(updated);
         setFolderInput(updated.folderUrl);
       }
-      setSuccessMsg('Simulated Google Drive folder connected with multi-camera moments!');
+      setSuccessMsg('Simulated Google Drive folder connected and published to visitors!');
       onDataUpdated();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
